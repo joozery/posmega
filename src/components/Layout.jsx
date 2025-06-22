@@ -1,0 +1,183 @@
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  ShoppingCart, 
+  Package, 
+  Users, 
+  BarChart3, 
+  Settings,
+  Menu,
+  X,
+  Store,
+  ChevronsLeft,
+  ChevronsRight,
+  Barcode
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+const Layout = ({ children }) => {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const location = useLocation();
+
+  const navigation = [
+    { name: 'แดชบอร์ด', href: '/dashboard', icon: LayoutDashboard },
+    { name: 'ขายสินค้า', href: '/pos', icon: ShoppingCart },
+    { name: 'สินค้า', href: '/products', icon: Package },
+    { name: 'พิมพ์บาร์โค้ด', href: '/barcodes', icon: Barcode },
+    { name: 'ลูกค้า', href: '/customers', icon: Users },
+    { name: 'รายงาน', href: '/reports', icon: BarChart3 },
+    { name: 'ตั้งค่า', href: '/settings', icon: Settings },
+  ];
+  
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsCollapsed(false);
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize(); 
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <div className="h-screen bg-background flex overflow-hidden">
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+      
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 bg-white shadow-lg flex-shrink-0 transition-all duration-300",
+          "lg:relative",
+          isCollapsed ? "w-20" : "w-64",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex h-20 items-center justify-between px-6 border-b shrink-0">
+             <motion.div animate={{ opacity: isCollapsed ? 0 : 1, width: isCollapsed ? 0 : 'auto' }} className="flex items-center space-x-3 overflow-hidden">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0">
+                <Store className="w-6 h-6 text-white" />
+              </div>
+              <span className="text-xl font-bold text-gray-900 whitespace-nowrap">Universal POS</span>
+            </motion.div>
+             <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className={cn("w-6 h-6", isCollapsed && "hidden")} />
+             </Button>
+          </div>
+
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+            {navigation.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={cn(`flex items-center px-4 py-3 text-base font-medium rounded-lg transition-all duration-200`,
+                    isActive
+                      ? 'bg-blue-100 text-blue-700 shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                    isCollapsed && 'justify-center'
+                  )}
+                  onClick={() => sidebarOpen && setSidebarOpen(false)}
+                >
+                  <item.icon className={cn(`h-6 w-6 shrink-0`, isActive ? 'text-blue-700' : 'text-gray-400', !isCollapsed && 'mr-4')} />
+                   <AnimatePresence>
+                    {!isCollapsed && (
+                       <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="whitespace-nowrap"
+                       >
+                         {item.name}
+                       </motion.span>
+                    )}
+                  </AnimatePresence>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="border-t p-4 shrink-0">
+             <Button 
+                variant="ghost"
+                className="w-full hidden lg:flex justify-start items-center" 
+                onClick={() => setIsCollapsed(!isCollapsed)}>
+                {isCollapsed ? <ChevronsRight className="w-6 h-6 mx-auto" /> : <><ChevronsLeft className="w-6 h-6 mr-4" /><span>ย่อเมนู</span></>}
+            </Button>
+            <div className={cn("flex items-center space-x-3 mt-4", isCollapsed && "justify-center")}>
+              <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center shrink-0">
+                <span className="text-white font-semibold text-lg">A</span>
+              </div>
+              {!isCollapsed && (
+                 <div>
+                    <p className="text-sm font-bold text-gray-900">Admin</p>
+                    <p className="text-xs text-gray-500">ผู้ดูแลระบบ</p>
+                  </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="sticky top-0 z-30 flex h-20 items-center justify-between bg-white px-4 sm:px-6 shadow-sm border-b shrink-0">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="lg:hidden"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <Menu className="w-6 h-6" />
+          </Button>
+          <div className="flex-1" />
+          <div className="text-sm text-gray-600 hidden sm:block">
+            {new Date().toLocaleDateString('th-TH', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="h-full"
+          >
+            {children}
+          </motion.div>
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default Layout;
