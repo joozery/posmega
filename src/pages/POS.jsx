@@ -1,17 +1,19 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
 import { usePos } from '@/hooks/usePos';
+import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import PosHeader from '@/components/pos/PosHeader';
 import ProductGrid from '@/components/pos/ProductGrid';
 import CartPanel from '@/components/pos/CartPanel';
 import CustomerDialog from '@/components/CustomerDialog';
 import ReceiptDialog from '@/components/ReceiptDialog';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart } from 'lucide-react';
+import { ShoppingCart, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const POS = () => {
   const { toast } = useToast();
+  const { hasPermission } = useAuth();
   const {
     products,
     customers,
@@ -80,6 +82,19 @@ const POS = () => {
         window.history.replaceState({}, document.title, newUrl);
     }
   }, [setCart, setSelectedCustomer, handleProcessSale, toast]);
+
+  // ตรวจสอบสิทธิ์การเข้าถึง POS
+  if (!hasPermission(PERMISSIONS.POS_VIEW)) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">ไม่มีสิทธิ์เข้าถึง</h2>
+          <p className="text-gray-500">คุณไม่มีสิทธิ์ในการเข้าถึงระบบ POS</p>
+        </div>
+      </div>
+    );
+  }
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

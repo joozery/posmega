@@ -171,7 +171,23 @@ const Products = () => {
                       {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover"/> : <ImageIcon className="w-6 h-6 text-gray-400"/>}
                     </div>
                   </td>
-                  <td className="py-4 px-6"><p className="font-medium text-gray-900">{product.name}</p></td>
+                  <td className="py-4 px-6">
+                    <p className="font-medium text-gray-900">{product.name}</p>
+                    {(product.sizes?.length > 0 || product.colors?.length > 0) && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {product.sizes?.map((size, index) => (
+                          <span key={index} className="inline-block bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded">
+                            {size}
+                          </span>
+                        ))}
+                        {product.colors?.map((color, index) => (
+                          <span key={index} className="inline-block bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded">
+                            {color}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="py-4 px-6 text-gray-600">{product.sku}</td>
                   <td className="py-4 px-6"><span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">{product.category}</span></td>
                   <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString()}</td>
@@ -199,6 +215,20 @@ const Products = () => {
                 <div>
                   <p className="font-bold text-gray-900">{product.name}</p>
                   <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                  {(product.sizes?.length > 0 || product.colors?.length > 0) && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {product.sizes?.map((size, index) => (
+                        <span key={index} className="inline-block bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded">
+                          {size}
+                        </span>
+                      ))}
+                      {product.colors?.map((color, index) => (
+                        <span key={index} className="inline-block bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded">
+                          {color}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex space-x-2">
                   <Button size="icon" variant="outline" className="w-8 h-8" onClick={() => editProduct(product)}><Edit className="w-4 h-4" /></Button>

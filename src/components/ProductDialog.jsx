@@ -6,10 +6,13 @@ import JsBarcode from 'jsbarcode';
 
 const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCategory }) => {
   const [formData, setFormData] = useState({
-    name: '', sku: '', category: '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: ''
+    name: '', sku: '', category: '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: '',
+    sizes: [], colors: []
   });
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newSize, setNewSize] = useState('');
+  const [newColor, setNewColor] = useState('');
   const barcodeRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -24,15 +27,20 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
         stock: product.stock || '',
         description: product.description || '',
         image: product.image || null,
-        originalPrice: product.originalPrice || ''
+        originalPrice: product.originalPrice || '',
+        sizes: product.sizes || [],
+        colors: product.colors || []
       });
     } else {
       setFormData({
-        name: '', sku: '', category: categories[0] || '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: ''
+        name: '', sku: '', category: categories[0] || '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: '',
+        sizes: [], colors: []
       });
     }
     setIsAddingCategory(false);
     setNewCategory('');
+    setNewSize('');
+    setNewColor('');
   }, [product, categories, isOpen]);
 
   useEffect(() => {
@@ -80,6 +88,28 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
       setIsAddingCategory(false);
       setNewCategory('');
     }
+  };
+
+  const handleAddSize = () => {
+    if (newSize.trim() !== '' && !formData.sizes.includes(newSize.trim())) {
+      handleChange('sizes', [...formData.sizes, newSize.trim()]);
+      setNewSize('');
+    }
+  };
+
+  const handleRemoveSize = (sizeToRemove) => {
+    handleChange('sizes', formData.sizes.filter(size => size !== sizeToRemove));
+  };
+
+  const handleAddColor = () => {
+    if (newColor.trim() !== '' && !formData.colors.includes(newColor.trim())) {
+      handleChange('colors', [...formData.colors, newColor.trim()]);
+      setNewColor('');
+    }
+  };
+
+  const handleRemoveColor = (colorToRemove) => {
+    handleChange('colors', formData.colors.filter(color => color !== colorToRemove));
   };
 
   return (
@@ -156,6 +186,78 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
                       <label className="block text-sm font-medium text-gray-700 mb-2">จำนวนสต็อก *</label>
                       <input type="number" min="0" required value={formData.stock} onChange={(e) => handleChange('stock', e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0"/>
                     </div>
+                     <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">ราคาทุน (฿)</label>
+                      <input type="number" min="0" step="0.01" value={formData.cost} onChange={(e) => handleChange('cost', e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="0.00"/>
+                    </div>
+                   </div>
+
+                   {/* ขนาด */}
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-2">ขนาด</label>
+                     <div className="space-y-2">
+                       <div className="flex items-center space-x-2">
+                         <input 
+                           type="text" 
+                           value={newSize} 
+                           onChange={(e) => setNewSize(e.target.value)}
+                           onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddSize())}
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                           placeholder="เพิ่มขนาด เช่น S, M, L, XL"
+                         />
+                         <Button type="button" onClick={handleAddSize} className="px-4 py-2">เพิ่ม</Button>
+                       </div>
+                       {formData.sizes.length > 0 && (
+                         <div className="flex flex-wrap gap-2">
+                           {formData.sizes.map((size, index) => (
+                             <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                               {size}
+                               <button
+                                 type="button"
+                                 onClick={() => handleRemoveSize(size)}
+                                 className="ml-2 text-blue-600 hover:text-blue-800"
+                               >
+                                 ×
+                               </button>
+                             </span>
+                           ))}
+                         </div>
+                       )}
+                     </div>
+                   </div>
+
+                   {/* สี */}
+                   <div>
+                     <label className="block text-sm font-medium text-gray-700 mb-2">สี</label>
+                     <div className="space-y-2">
+                       <div className="flex items-center space-x-2">
+                         <input 
+                           type="text" 
+                           value={newColor} 
+                           onChange={(e) => setNewColor(e.target.value)}
+                           onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddColor())}
+                           className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                           placeholder="เพิ่มสี เช่น แดง, น้ำเงิน, ดำ"
+                         />
+                         <Button type="button" onClick={handleAddColor} className="px-4 py-2">เพิ่ม</Button>
+                       </div>
+                       {formData.colors.length > 0 && (
+                         <div className="flex flex-wrap gap-2">
+                           {formData.colors.map((color, index) => (
+                             <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800">
+                               {color}
+                               <button
+                                 type="button"
+                                 onClick={() => handleRemoveColor(color)}
+                                 className="ml-2 text-green-600 hover:text-green-800"
+                               >
+                                 ×
+                               </button>
+                             </span>
+                           ))}
+                         </div>
+                       )}
+                     </div>
                    </div>
                 </div>
               </div>

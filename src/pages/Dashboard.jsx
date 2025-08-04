@@ -8,15 +8,19 @@ import {
   Calendar,
   ArrowUpRight,
   ArrowDownRight,
-  Download
+  Download,
+  User,
+  Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import Papa from 'papaparse';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
   const { toast } = useToast();
+  const { currentUser, hasPermission } = useAuth();
   const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
@@ -108,6 +112,15 @@ const Dashboard = () => {
     .slice(0, 5);
 
   const handleExport = () => {
+    if (!hasPermission(PERMISSIONS.REPORTS_EXPORT)) {
+      toast({
+        title: "ไม่มีสิทธิ์",
+        description: "คุณไม่มีสิทธิ์ในการส่งออกรายงาน",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (sales.length === 0) {
       toast({
         title: "ไม่มีข้อมูลให้ส่งออก",
@@ -152,10 +165,14 @@ const Dashboard = () => {
           <h1 className="text-3xl font-bold text-gray-900">แดชบอร์ด</h1>
           <p className="text-gray-600 mt-1">ภาพรวมการขายและสถิติร้านค้า</p>
         </div>
-        <Button onClick={handleExport}>
-          <Download className="w-4 h-4 mr-2" />
-          ส่งออกรายงานทั้งหมด
-        </Button>
+        <div className="flex items-center gap-4">
+          {hasPermission(PERMISSIONS.REPORTS_EXPORT) && (
+            <Button onClick={handleExport}>
+              <Download className="w-4 h-4 mr-2" />
+              ส่งออกรายงานทั้งหมด
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -260,28 +277,81 @@ const Dashboard = () => {
         </motion.div>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.6 }}
-        className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white"
-      >
-        <div className="flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-4">
-          <div>
-            <h2 className="text-xl font-semibold mb-2">เริ่มขายสินค้าเลย!</h2>
-            <p className="text-blue-100">ระบบ POS พร้อมใช้งาน เริ่มต้นการขายได้ทันที</p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.6 }}
+          className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl p-6 text-white"
+        >
+          <div className="flex flex-col md:flex-row items-center justify-between text-center md:text-left gap-4">
+            <div>
+              <h2 className="text-xl font-semibold mb-2">เริ่มขายสินค้าเลย!</h2>
+              <p className="text-blue-100">ระบบ POS พร้อมใช้งาน เริ่มต้นการขายได้ทันที</p>
+            </div>
+            <Button 
+              variant="secondary" 
+              size="lg"
+              onClick={() => navigate('/pos')}
+              className="bg-white text-blue-600 hover:bg-gray-100 flex-shrink-0"
+            >
+              <ShoppingCart className="w-5 h-5 mr-2" />
+              เริ่มขาย
+            </Button>
           </div>
-          <Button 
-            variant="secondary" 
-            size="lg"
-            onClick={() => navigate('/pos')}
-            className="bg-white text-blue-600 hover:bg-gray-100 flex-shrink-0"
-          >
-            <ShoppingCart className="w-5 h-5 mr-2" />
-            เริ่มขาย
-          </Button>
-        </div>
-      </motion.div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-white rounded-xl p-6 shadow-sm border"
+        >
+          <div className="flex items-center mb-4">
+            <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center mr-4">
+              <User className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">ข้อมูลผู้ใช้</h2>
+              <p className="text-gray-600">ข้อมูลการเข้าสู่ระบบปัจจุบัน</p>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">ชื่อผู้ใช้:</span>
+              <span className="font-medium">{currentUser?.name}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">บทบาท:</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                {currentUser?.role}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-600">เข้าสู่ระบบล่าสุด:</span>
+              <span className="text-sm text-gray-500">
+                {currentUser?.lastLogin 
+                  ? new Date(currentUser.lastLogin).toLocaleString('th-TH')
+                  : 'เพิ่งเข้าสู่ระบบ'
+                }
+              </span>
+            </div>
+            {hasPermission(PERMISSIONS.USERS_VIEW) && (
+              <div className="pt-3 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => navigate('/users')}
+                  className="w-full"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  จัดการผู้ใช้
+                </Button>
+              </div>
+            )}
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 };

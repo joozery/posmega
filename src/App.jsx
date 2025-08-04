@@ -3,15 +3,21 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { Helmet } from 'react-helmet';
 import { Toaster } from '@/components/ui/toaster';
 import Layout from '@/components/Layout';
+import LoginDialog from '@/components/LoginDialog';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import Dashboard from '@/pages/Dashboard';
 import POS from '@/pages/POS';
 import Products from '@/pages/Products';
 import Customers from '@/pages/Customers';
+import CustomerHistory from '@/pages/CustomerHistory';
 import Reports from '@/pages/Reports';
+import RefundHistory from '@/pages/RefundHistory';
 import Settings from '@/pages/Settings';
 import Barcodes from '@/pages/Barcodes';
+import Users from '@/pages/Users';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
+import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 
 const getStripePromise = () => {
   try {
@@ -28,6 +34,9 @@ const getStripePromise = () => {
 
 function App() {
   const [stripePromise, setStripePromise] = useState(getStripePromise());
+  const { isAuthenticated } = useAuth();
+  
+  console.log('App render - isAuthenticated:', isAuthenticated);
 
   useEffect(() => {
     const handleSettingsChange = () => {
@@ -52,18 +61,82 @@ function App() {
       </Helmet>
       <Router>
         <Elements stripe={stripePromise}>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/pos" element={<POS />} />
-              <Route path="/products" element={<Products />} />
-              <Route path="/barcodes" element={<Barcodes />} />
-              <Route path="/customers" element={<Customers />} />
-              <Route path="/reports" element={<Reports />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </Layout>
+          {!isAuthenticated ? (
+            <>
+              <Helmet>
+                <title>เข้าสู่ระบบ - Universal POS</title>
+                <meta name="description" content="เข้าสู่ระบบระบบ Point of Sale" />
+              </Helmet>
+              <LoginDialog />
+            </>
+          ) : (
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+                
+                <Route path="/dashboard" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/pos" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.POS_VIEW]}>
+                    <POS />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/products" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.PRODUCTS_VIEW]}>
+                    <Products />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/barcodes" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.BARCODES_VIEW]}>
+                    <Barcodes />
+                  </ProtectedRoute>
+                } />
+                
+                              <Route path="/customers" element={
+                <ProtectedRoute requiredPermissions={[PERMISSIONS.CUSTOMERS_VIEW]}>
+                  <Customers />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/customer-history" element={
+                <ProtectedRoute requiredPermissions={[PERMISSIONS.CUSTOMERS_VIEW]}>
+                  <CustomerHistory />
+                </ProtectedRoute>
+              } />
+                
+                              <Route path="/reports" element={
+                <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>
+                  <Reports />
+                </ProtectedRoute>
+              } />
+              
+              <Route path="/refund-history" element={
+                <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>
+                  <RefundHistory />
+                </ProtectedRoute>
+              } />
+                
+                <Route path="/users" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.USERS_VIEW]}>
+                    <Users />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/settings" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.SETTINGS_VIEW]}>
+                    <Settings />
+                  </ProtectedRoute>
+                } />
+              </Routes>
+            </Layout>
+          )}
         </Elements>
         <Toaster />
       </Router>

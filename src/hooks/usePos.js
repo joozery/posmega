@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import sendLineMessage from '@/utils/lineNotify';
 
 export const usePos = () => {
     const { toast } = useToast();
+    const { hasPermission } = useAuth();
     const [products, setProducts] = useState([]);
     const [customers, setCustomers] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -33,6 +35,11 @@ export const usePos = () => {
     }, [loadData]);
 
     const addToCart = useCallback((product) => {
+        if (!hasPermission(PERMISSIONS.POS_ADD_TO_CART)) {
+            toast({ title: "ไม่มีสิทธิ์", description: "คุณไม่มีสิทธิ์ในการเพิ่มสินค้าลงตะกร้า", variant: "destructive" });
+            return;
+        }
+        
         if (product.stock <= 0) {
             toast({ title: "สินค้าหมด", description: `${product.name} ไม่มีในสต็อกแล้ว`, variant: "destructive" });
             return;
@@ -52,7 +59,7 @@ export const usePos = () => {
                 return [...prevCart, { ...product, quantity: 1 }];
             }
         });
-    }, [toast]);
+    }, [toast, hasPermission]);
 
     const removeFromCart = useCallback((id) => {
         setCart(prevCart => prevCart.filter(item => item.id !== id));
@@ -79,6 +86,11 @@ export const usePos = () => {
     }, [products, toast, removeFromCart]);
 
     const processSale = useCallback((paymentMethod, discountInfo = { pointsUsed: 0, discountAmount: 0 }) => {
+        if (!hasPermission(PERMISSIONS.POS_PROCESS_SALE)) {
+            toast({ title: "ไม่มีสิทธิ์", description: "คุณไม่มีสิทธิ์ในการประมวลผลการขาย", variant: "destructive" });
+            return null;
+        }
+        
         if (cart.length === 0) return null;
         
         const settings = JSON.parse(localStorage.getItem('pos_settings') || '{}');
@@ -162,6 +174,11 @@ export const usePos = () => {
     }, [cart, selectedCustomer]);
 
     const handleSaveCustomer = useCallback((customerData) => {
+        if (!hasPermission(PERMISSIONS.CUSTOMERS_CREATE)) {
+            toast({ title: "ไม่มีสิทธิ์", description: "คุณไม่มีสิทธิ์ในการเพิ่มลูกค้า", variant: "destructive" });
+            return;
+        }
+        
         const newCustomer = { 
             ...customerData, 
             id: Date.now(),
@@ -175,7 +192,7 @@ export const usePos = () => {
         localStorage.setItem('pos_customers', JSON.stringify(updatedCustomers));
         setSelectedCustomer(newCustomer);
         toast({ title: "เพิ่มลูกค้าสำเร็จ", description: `${newCustomer.name} ถูกเลือกสำหรับออเดอร์นี้` });
-    }, [customers, toast]);
+    }, [customers, toast, hasPermission]);
 
     return {
         products,
