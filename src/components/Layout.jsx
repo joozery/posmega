@@ -1,27 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { 
   LayoutDashboard, 
   ShoppingCart, 
   Package, 
   Users, 
   BarChart3, 
-  Settings, 
+  Settings,
   QrCode,
   Menu,
   X,
+  Store,
+  ChevronsLeft,
+  ChevronsRight,
   LogOut,
   User,
   Shield,
   History
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [storeSettings, setStoreSettings] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout, hasPermission } = useAuth();
@@ -32,67 +38,48 @@ const Layout = ({ children }) => {
     navigate('/login');
   };
 
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsCollapsed(false);
+        setSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    handleResize(); 
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const loadStoreSettings = () => {
+      const saved = localStorage.getItem('pos_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setStoreSettings(parsed.system || { storeName: 'Universal POS', logo: '' });
+      } else {
+        setStoreSettings({ storeName: 'Universal POS', logo: '' });
+      }
+    };
+
+    loadStoreSettings();
+    
+    const handleSettingsUpdate = () => loadStoreSettings();
+    window.addEventListener('settings_updated', handleSettingsUpdate);
+    
+    return () => window.removeEventListener('settings_updated', handleSettingsUpdate);
+  }, []);
+
   const navigation = [
-    {
-      name: 'แดชบอร์ด',
-      href: '/dashboard',
-      icon: LayoutDashboard,
-      permission: PERMISSIONS.REPORTS_VIEW
-    },
-    {
-      name: 'POS',
-      href: '/pos',
-      icon: ShoppingCart,
-      permission: PERMISSIONS.POS_VIEW
-    },
-    {
-      name: 'สินค้า',
-      href: '/products',
-      icon: Package,
-      permission: PERMISSIONS.PRODUCTS_VIEW
-    },
-    {
-      name: 'ลูกค้า',
-      href: '/customers',
-      icon: Users,
-      permission: PERMISSIONS.CUSTOMERS_VIEW
-    },
-    {
-      name: 'ประวัติลูกค้า',
-      href: '/customer-history',
-      icon: User,
-      permission: PERMISSIONS.CUSTOMERS_VIEW
-    },
-    {
-      name: 'รายงาน',
-      href: '/reports',
-      icon: BarChart3,
-      permission: PERMISSIONS.REPORTS_VIEW
-    },
-    {
-      name: 'ประวัติการขาย',
-      href: '/refund-history',
-      icon: History,
-      permission: PERMISSIONS.REPORTS_VIEW
-    },
-    {
-      name: 'บาร์โค้ด',
-      href: '/barcodes',
-      icon: QrCode,
-      permission: PERMISSIONS.BARCODES_VIEW
-    },
-    {
-      name: 'ผู้ใช้',
-      href: '/users',
-      icon: Shield,
-      permission: PERMISSIONS.USERS_VIEW
-    },
-    {
-      name: 'ตั้งค่า',
-      href: '/settings',
-      icon: Settings,
-      permission: PERMISSIONS.SETTINGS_VIEW
-    }
+    { name: 'แดชบอร์ด', href: '/dashboard', icon: LayoutDashboard, permission: PERMISSIONS.REPORTS_VIEW },
+    { name: 'ขายสินค้า', href: '/pos', icon: ShoppingCart, permission: PERMISSIONS.POS_VIEW },
+    { name: 'สินค้า', href: '/products', icon: Package, permission: PERMISSIONS.PRODUCTS_VIEW },
+    { name: 'พิมพ์บาร์โค้ด', href: '/barcodes', icon: QrCode, permission: PERMISSIONS.BARCODES_VIEW },
+    { name: 'ลูกค้า', href: '/customers', icon: Users, permission: PERMISSIONS.CUSTOMERS_VIEW },
+    { name: 'ประวัติลูกค้า', href: '/customer-history', icon: User, permission: PERMISSIONS.CUSTOMERS_VIEW },
+    { name: 'รายงาน', href: '/reports', icon: BarChart3, permission: PERMISSIONS.REPORTS_VIEW },
+    { name: 'ประวัติการขาย', href: '/refund-history', icon: History, permission: PERMISSIONS.REPORTS_VIEW },
+    { name: 'ผู้ใช้', href: '/users', icon: Shield, permission: PERMISSIONS.USERS_VIEW },
+    { name: 'ตั้งค่า', href: '/settings', icon: Settings, permission: PERMISSIONS.SETTINGS_VIEW },
   ];
 
   const filteredNavigation = navigation.filter(item => 
@@ -102,127 +89,149 @@ const Layout = ({ children }) => {
   const isActive = (href) => location.pathname === href;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar */}
-      <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75" onClick={() => setSidebarOpen(false)} />
-        <div className="fixed inset-y-0 left-0 flex w-64 flex-col bg-white shadow-xl">
-          <div className="flex h-16 items-center justify-between px-4 border-b">
-            <h1 className="text-xl font-bold text-gray-900">POS System</h1>
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)}>
-              <X className="w-5 h-5" />
-            </Button>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {filteredNavigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
+    <div className="h-screen bg-background flex overflow-hidden">
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40 bg-black bg-opacity-50 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+      
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 bg-white shadow-lg flex-shrink-0 transition-all duration-300",
+          "lg:relative",
+          isCollapsed ? "w-20" : "w-64",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        <div className="flex h-full flex-col">
+          <div className="flex h-20 items-center justify-between px-6 border-b shrink-0">
+             <motion.div animate={{ opacity: isCollapsed ? 0 : 1, width: isCollapsed ? 0 : 'auto' }} className="flex items-center space-x-3 overflow-hidden">
+              {storeSettings?.logo ? (
+                <img 
+                  src={storeSettings.logo} 
+                  alt="Store Logo" 
+                  className="w-10 h-10 object-contain rounded-lg shrink-0"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0">
+                  <Store className="w-6 h-6 text-white" />
+                </div>
+              )}
+              <span className="text-xl font-bold text-gray-900 whitespace-nowrap">
+                {storeSettings?.storeName || 'Universal POS'}
+              </span>
+            </motion.div>
+             <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
                 onClick={() => setSidebarOpen(false)}
-                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive(item.href)
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
               >
-                <item.icon className="mr-3 h-5 w-5" />
-                {item.name}
-              </Link>
-            ))}
+                <X className={cn("w-6 h-6", isCollapsed && "hidden")} />
+             </Button>
+          </div>
+
+          <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto scrollbar-hide">
+            {filteredNavigation.map((item) => {
+              const isActive = location.pathname === item.href;
+              return (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={cn(`flex items-center px-4 py-3 text-base font-medium rounded-lg transition-all duration-200`,
+                    isActive
+                      ? 'bg-blue-100 text-blue-700 shadow-sm'
+                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+                    isCollapsed && 'justify-center'
+                  )}
+                  onClick={() => sidebarOpen && setSidebarOpen(false)}
+                >
+                  <item.icon className={cn(`h-6 w-6 shrink-0`, isActive ? 'text-blue-700' : 'text-gray-400', !isCollapsed && 'mr-4')} />
+                   <AnimatePresence>
+                    {!isCollapsed && (
+                       <motion.span
+                        initial={{ opacity: 0, width: 0 }}
+                        animate={{ opacity: 1, width: 'auto' }}
+                        exit={{ opacity: 0, width: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="whitespace-nowrap"
+                       >
+                         {item.name}
+                       </motion.span>
+                    )}
+                  </AnimatePresence>
+                </Link>
+              );
+            })}
           </nav>
-          <div className="border-t p-4">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {currentUser?.name?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">{currentUser?.name}</p>
-                <p className="text-xs text-gray-500">{currentUser?.role}</p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              ออกจากระบบ
+
+          <div className="border-t p-4 shrink-0">
+             <Button 
+                variant="ghost"
+                className="w-full hidden lg:flex justify-start items-center" 
+                onClick={() => setIsCollapsed(!isCollapsed)}>
+                {isCollapsed ? <ChevronsRight className="w-6 h-6 mx-auto" /> : <><ChevronsLeft className="w-6 h-6 mr-4" /><span>ย่อเมนู</span></>}
             </Button>
+            <div className={cn("flex items-center space-x-3 mt-4", isCollapsed && "justify-center")}>
+              <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center shrink-0">
+                <span className="text-white font-semibold text-lg">{currentUser?.name?.charAt(0).toUpperCase()}</span>
+              </div>
+              {!isCollapsed && (
+                 <div>
+                    <p className="text-sm font-bold text-gray-900">{currentUser?.name}</p>
+                    <p className="text-xs text-gray-500">{currentUser?.role}</p>
+                  </div>
+              )}
+            </div>
+            {!isCollapsed && (
+              <Button variant="outline" size="sm" className="w-full mt-3" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                ออกจากระบบ
+              </Button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Desktop sidebar */}
-      <div className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
-        <div className="flex flex-col flex-grow bg-white shadow-xl">
-          <div className="flex h-16 items-center px-4 border-b">
-            <h1 className="text-xl font-bold text-gray-900">POS System</h1>
-          </div>
-          <nav className="flex-1 space-y-1 px-2 py-4">
-            {filteredNavigation.map((item) => (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`group flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors ${
-                  isActive(item.href)
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                }`}
-              >
-                <item.icon className="mr-3 h-5 w-5" />
-                {item.name}
-              </Link>
-            ))}
-          </nav>
-          <div className="border-t p-4">
-            <div className="flex items-center mb-4">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">
-                  {currentUser?.name?.charAt(0).toUpperCase()}
-                </span>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">{currentUser?.name}</p>
-                <p className="text-xs text-gray-500">{currentUser?.role}</p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="w-full" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              ออกจากระบบ
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="lg:pl-64">
-        {/* Top bar */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="sticky top-0 z-30 flex h-20 items-center justify-between bg-white px-4 sm:px-6 shadow-sm border-b shrink-0">
           <Button
             variant="ghost"
             size="icon"
             className="lg:hidden"
             onClick={() => setSidebarOpen(true)}
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-6 h-6" />
           </Button>
-
-          <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <div className="flex flex-1"></div>
-            <div className="flex items-center gap-x-4 lg:gap-x-6">
-              <div className="hidden sm:flex sm:items-center sm:gap-x-4">
-                <div className="flex items-center gap-x-2">
-                  <User className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-700">{currentUser?.name}</span>
-                </div>
-              </div>
-            </div>
+          <div className="flex-1" />
+          <div className="text-sm text-gray-600 hidden sm:block">
+            {new Date().toLocaleDateString('th-TH', {
+              weekday: 'long',
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}
           </div>
-        </div>
+        </header>
 
-        {/* Page content */}
-        <main className="py-6">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <main className="flex-1 p-4 sm:p-6 overflow-y-auto scrollbar-hide">
+          <motion.div
+            key={location.pathname}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="h-full"
+          >
             {children}
-          </div>
+          </motion.div>
         </main>
       </div>
     </div>

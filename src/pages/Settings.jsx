@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Settings as SettingsIcon, CreditCard, ListPlus, Barcode, Star, MessageSquare } from 'lucide-react';
+import { Settings as SettingsIcon, CreditCard, ListPlus, Barcode, Star, MessageSquare, Store, Upload, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
@@ -13,7 +13,16 @@ const Settings = () => {
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('pos_settings');
     const defaults = {
-      system: { storeName: 'Universal POS', taxRate: 7 },
+      system: { 
+        storeName: 'Universal POS', 
+        taxRate: 7,
+        logo: '',
+        address: '',
+        phone: '',
+        email: '',
+        website: '',
+        taxId: ''
+      },
       payment: { promptpayId: '', stripePublishableKey: '', stripePriceId: '' },
       categories: ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ'],
       loyalty: { purchaseAmountForOnePoint: 100, onePointValueInBaht: 1 },
@@ -24,6 +33,7 @@ const Settings = () => {
         return { 
             ...defaults, 
             ...parsed, 
+            system: { ...defaults.system, ...parsed.system },
             loyalty: { ...defaults.loyalty, ...parsed.loyalty },
             notifications: { ...defaults.notifications, ...parsed.notifications }
         };
@@ -31,6 +41,32 @@ const Settings = () => {
     return defaults;
   });
   const [newCategory, setNewCategory] = useState('');
+  
+  const handleLogoUpload = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({ 
+          title: "ไฟล์ใหญ่เกินไป", 
+          description: "กรุณาเลือกไฟล์ที่มีขนาดไม่เกิน 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        handleSystemChange('logo', e.target.result);
+        toast({ title: "อัปโหลดโลโก้สำเร็จ", description: "โลโก้ของคุณถูกบันทึกแล้ว" });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    handleSystemChange('logo', '');
+    toast({ title: "ลบโลโก้สำเร็จ", description: "โลโก้ถูกลบออกแล้ว" });
+  };
 
   const handleSave = () => {
     localStorage.setItem('pos_settings', JSON.stringify(settings));
@@ -75,8 +111,9 @@ const Settings = () => {
         <Button onClick={handleSave}>บันทึกการเปลี่ยนแปลง</Button>
       </div>
 
-      <Tabs defaultValue="system" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-6">
+      <Tabs defaultValue="store" className="w-full">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-4 md:grid-cols-7">
+          <TabsTrigger value="store"><Store className="w-4 h-4 mr-2" />ร้านค้า</TabsTrigger>
           <TabsTrigger value="system"><SettingsIcon className="w-4 h-4 mr-2" />ระบบ</TabsTrigger>
           <TabsTrigger value="payment"><CreditCard className="w-4 h-4 mr-2" />การชำระเงิน</TabsTrigger>
           <TabsTrigger value="categories"><ListPlus className="w-4 h-4 mr-2" />หมวดหมู่</TabsTrigger>
@@ -84,17 +121,145 @@ const Settings = () => {
           <TabsTrigger value="loyalty"><Star className="w-4 h-4 mr-2" />สมาชิก</TabsTrigger>
           <TabsTrigger value="notifications"><MessageSquare className="w-4 h-4 mr-2" />แจ้งเตือน</TabsTrigger>
         </TabsList>
+        
+        <TabsContent value="store" className="mt-6">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl p-6 shadow-sm border">
+            <h3 className="text-xl font-semibold mb-6">ข้อมูลร้านค้า</h3>
+            
+            {/* Logo Section */}
+            <div className="mb-8">
+              <label className="block text-sm font-medium text-gray-700 mb-3">โลโก้ร้านค้า</label>
+              <div className="flex items-start gap-6">
+                <div className="flex-shrink-0">
+                  {settings.system.logo ? (
+                    <div className="relative">
+                      <img 
+                        src={settings.system.logo} 
+                        alt="Store Logo" 
+                        className="w-24 h-24 object-contain border-2 border-gray-200 rounded-lg bg-gray-50"
+                      />
+                      <button
+                        onClick={handleRemoveLogo}
+                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-24 h-24 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+                      <Upload className="w-8 h-8 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <div className="mb-2">
+                    <label htmlFor="logo-upload" className="cursor-pointer">
+                      <Button variant="outline" className="w-full sm:w-auto">
+                        <Upload className="w-4 h-4 mr-2" />
+                        {settings.system.logo ? 'เปลี่ยนโลโก้' : 'อัปโหลดโลโก้'}
+                      </Button>
+                    </label>
+                    <input
+                      id="logo-upload"
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoUpload}
+                      className="hidden"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    รองรับไฟล์: JPG, PNG, GIF (ขนาดไม่เกิน 5MB)<br/>
+                    ขนาดที่แนะนำ: 200x200 พิกเซล
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Store Information */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อร้านค้า *</label>
+                <input 
+                  type="text" 
+                  value={settings.system.storeName} 
+                  onChange={e => handleSystemChange('storeName', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="ชื่อร้านค้าของคุณ"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">เลขประจำตัวผู้เสียภาษี</label>
+                <input 
+                  type="text" 
+                  value={settings.system.taxId} 
+                  onChange={e => handleSystemChange('taxId', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="0-0000-00000-00-0"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">ที่อยู่ร้านค้า</label>
+                <textarea 
+                  value={settings.system.address} 
+                  onChange={e => handleSystemChange('address', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  rows="3"
+                  placeholder="ที่อยู่ของร้านค้า"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์</label>
+                <input 
+                  type="tel" 
+                  value={settings.system.phone} 
+                  onChange={e => handleSystemChange('phone', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="0xx-xxx-xxxx"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">อีเมล</label>
+                <input 
+                  type="email" 
+                  value={settings.system.email} 
+                  onChange={e => handleSystemChange('email', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="contact@yourstore.com"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">เว็บไซต์</label>
+                <input 
+                  type="url" 
+                  value={settings.system.website} 
+                  onChange={e => handleSystemChange('website', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="https://www.yourstore.com"
+                />
+              </div>
+            </div>
+          </motion.div>
+        </TabsContent>
+        
         <TabsContent value="system" className="mt-6">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl p-6 shadow-sm border">
-            <h3 className="text-xl font-semibold mb-4">ตั้งค่าทั่วไป</h3>
+            <h3 className="text-xl font-semibold mb-4">ตั้งค่าระบบ</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">ชื่อร้านค้า</label>
-                <input type="text" value={settings.system.storeName} onChange={e => handleSystemChange('storeName', e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
-              </div>
-              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">อัตราภาษี (%)</label>
-                <input type="number" value={settings.system.taxRate} onChange={e => handleSystemChange('taxRate', e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+                <input 
+                  type="number" 
+                  value={settings.system.taxRate} 
+                  onChange={e => handleSystemChange('taxRate', e.target.value)} 
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
+                  placeholder="7"
+                />
+                <p className="text-xs text-gray-500 mt-1">อัตราภาษีมูลค่าเพิ่ม (VAT) ที่จะคิดในใบเสร็จและใบกำกับภาษี</p>
               </div>
             </div>
           </motion.div>

@@ -25,8 +25,29 @@ const Receipt = React.forwardRef(({ sale, settings }, ref) => {
     return (
         <div ref={ref} className="bg-white text-black p-4 font-sans text-xs w-[300px] mx-auto">
             <div className="text-center">
+                {settings?.system?.logo && (
+                    <div className="mb-2">
+                        <img 
+                            src={settings.system.logo} 
+                            alt="Store Logo" 
+                            className="w-16 h-16 object-contain mx-auto"
+                        />
+                    </div>
+                )}
                 <h1 className="text-base font-bold">{settings?.system?.storeName || 'My Store'}</h1>
-                <p>ใบเสร็จรับเงิน/ใบกำกับภาษีอย่างย่อ</p>
+                {settings?.system?.address && (
+                    <p className="text-xs mt-1">{settings.system.address}</p>
+                )}
+                {(settings?.system?.phone || settings?.system?.email) && (
+                    <div className="text-xs mt-1">
+                        {settings?.system?.phone && <p>โทร: {settings.system.phone}</p>}
+                        {settings?.system?.email && <p>อีเมล: {settings.system.email}</p>}
+                    </div>
+                )}
+                {settings?.system?.taxId && (
+                    <p className="text-xs mt-1">เลขประจำตัวผู้เสียภาษี: {settings.system.taxId}</p>
+                )}
+                <p className="mt-2">ใบเสร็จรับเงิน/ใบกำกับภาษีอย่างย่อ</p>
                 <p>----------------------------------------</p>
             </div>
             <div className="my-2">

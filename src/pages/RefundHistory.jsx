@@ -26,6 +26,7 @@ const RefundHistory = () => {
   const [filteredSales, setFilteredSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDateRange, setSelectedDateRange] = useState('all');
+  const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
   const [selectedSale, setSelectedSale] = useState(null);
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
@@ -55,30 +56,51 @@ const RefundHistory = () => {
     // กรองตามช่วงวันที่
     if (selectedDateRange !== 'all') {
       const today = new Date();
-      const startDate = new Date();
+      let startDate, endDate;
       
       switch (selectedDateRange) {
         case 'today':
-          startDate.setHours(0, 0, 0, 0);
+          startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+          endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
           break;
         case 'week':
-          startDate.setDate(today.getDate() - 7);
+          const startOfWeek = new Date(today);
+          startOfWeek.setDate(today.getDate() - today.getDay());
+          startOfWeek.setHours(0, 0, 0, 0);
+          startDate = startOfWeek;
+          endDate = new Date(startOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000);
           break;
         case 'month':
-          startDate.setMonth(today.getMonth() - 1);
+          startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+          endDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+          break;
+        case 'year':
+          startDate = new Date(today.getFullYear(), 0, 1);
+          endDate = new Date(today.getFullYear() + 1, 0, 1);
+          break;
+        case 'custom':
+          if (customDateRange.start && customDateRange.end) {
+            startDate = new Date(customDateRange.start);
+            endDate = new Date(customDateRange.end);
+            endDate.setDate(endDate.getDate() + 1); // Include end date
+          } else {
+            break; // Skip filtering if custom range is incomplete
+          }
           break;
         default:
           break;
       }
 
-      filtered = filtered.filter(sale => {
-        const saleDate = new Date(sale.timestamp);
-        return saleDate >= startDate && saleDate <= today;
-      });
+      if (startDate && endDate) {
+        filtered = filtered.filter(sale => {
+          const saleDate = new Date(sale.timestamp);
+          return saleDate >= startDate && saleDate < endDate;
+        });
+      }
     }
 
     setFilteredSales(filtered);
-  }, [sales, searchTerm, selectedDateRange]);
+  }, [sales, searchTerm, selectedDateRange, customDateRange]);
 
   const handleRefund = (sale) => {
     if (!hasPermission(PERMISSIONS.POS_REFUND)) {
@@ -284,7 +306,8 @@ const RefundHistory = () => {
 
       {/* ตัวกรอง */}
       <div className="bg-white rounded-xl p-6 shadow-sm border">
-        <div className="flex flex-col sm:flex-row gap-4">
+        <div className="space-y-4">
+          {/* Search Bar */}
           <div className="flex-1">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -297,18 +320,64 @@ const RefundHistory = () => {
               />
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Filter className="w-5 h-5 text-gray-400" />
-            <select
-              value={selectedDateRange}
-              onChange={(e) => setSelectedDateRange(e.target.value)}
-              className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="all">ทุกวัน</option>
-              <option value="today">วันนี้</option>
-              <option value="week">7 วันล่าสุด</option>
-              <option value="month">30 วันล่าสุด</option>
-            </select>
+
+          {/* Date Filter */}
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-gray-500" />
+              <span className="font-medium text-gray-700">กรองตามวันที่:</span>
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'all', label: 'ทั้งหมด' },
+                { value: 'today', label: 'วันนี้' },
+                { value: 'week', label: 'สัปดาห์นี้' },
+                { value: 'month', label: 'เดือนนี้' },
+                { value: 'year', label: 'ปีนี้' },
+                { value: 'custom', label: 'กำหนดเอง' }
+              ].map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => setSelectedDateRange(filter.value)}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedDateRange === filter.value
+                      ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+
+            {selectedDateRange === 'custom' && (
+              <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                <input
+                  type="date"
+                  value={customDateRange.start}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <span className="text-gray-500">ถึง</span>
+                <input
+                  type="date"
+                  value={customDateRange.end}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Results Summary */}
+          <div className="flex items-center justify-between pt-2 border-t">
+            <span className="text-sm text-gray-600">
+              แสดง {filteredSales.length} รายการ จากทั้งหมด {sales.length} รายการ
+            </span>
+            <span className="text-sm font-medium text-blue-600">
+              ยอดรวม: ฿{filteredSales.reduce((sum, sale) => sum + sale.total, 0).toLocaleString()}
+            </span>
           </div>
         </div>
       </div>
@@ -518,10 +587,31 @@ const RefundHistory = () => {
             <h2 className="text-xl font-semibold mb-4">ใบกำกับภาษี</h2>
             <div className="space-y-4">
               <div className="text-center border-b pb-4">
-                <h3 className="text-lg font-bold">ร้านค้า</h3>
-                <p className="text-sm text-gray-600">ใบกำกับภาษีอย่างย่อ</p>
-                <p className="text-sm text-gray-600">{selectedSale.id}</p>
-                <p className="text-sm text-gray-600">{new Date(selectedSale.timestamp).toLocaleString('th-TH')}</p>
+                {settings?.system?.logo && (
+                  <div className="mb-3">
+                    <img 
+                      src={settings.system.logo} 
+                      alt="Store Logo" 
+                      className="w-20 h-20 object-contain mx-auto"
+                    />
+                  </div>
+                )}
+                <h3 className="text-lg font-bold">{settings?.system?.storeName || 'ร้านค้า'}</h3>
+                {settings?.system?.address && (
+                  <p className="text-sm text-gray-600 mt-1">{settings.system.address}</p>
+                )}
+                {(settings?.system?.phone || settings?.system?.email) && (
+                  <div className="text-sm text-gray-600 mt-1">
+                    {settings?.system?.phone && <p>โทร: {settings.system.phone}</p>}
+                    {settings?.system?.email && <p>อีเมล: {settings.system.email}</p>}
+                  </div>
+                )}
+                {settings?.system?.taxId && (
+                  <p className="text-sm text-gray-600 mt-1">เลขประจำตัวผู้เสียภาษี: {settings.system.taxId}</p>
+                )}
+                <p className="text-sm text-gray-600 mt-2 font-medium">ใบกำกับภาษีอย่างย่อ</p>
+                <p className="text-sm text-gray-600">เลขที่: {selectedSale.id}</p>
+                <p className="text-sm text-gray-600">วันที่: {new Date(selectedSale.timestamp).toLocaleString('th-TH')}</p>
               </div>
               
               <div>
