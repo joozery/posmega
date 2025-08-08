@@ -39,13 +39,23 @@ const POS = () => {
   const [isCartVisible, setIsCartVisible] = useState(false);
   const searchInputRef = useRef(null);
 
-  const handleProcessSale = useCallback((paymentMethod, discountInfo) => {
-    const saleData = processSale(paymentMethod, discountInfo);
-    if(saleData) {
-        setLastSale(saleData);
-        setIsCartVisible(false);
+  const handleProcessSale = useCallback(async (paymentMethod, discountInfo) => {
+    try {
+      console.log('Processing sale with:', { paymentMethod, discountInfo });
+      const saleData = await processSale(paymentMethod, discountInfo);
+      console.log('Sale data returned:', saleData);
+      if(saleData) {
+          setLastSale(saleData);
+          setIsCartVisible(false);
+          console.log('Sale processed successfully, lastSale set to:', saleData);
+      } else {
+          console.log('No sale data returned from processSale');
+      }
+      return saleData;
+    } catch (error) {
+      console.error('Error in handleProcessSale:', error);
+      return null;
     }
-    return saleData;
   }, [processSale]);
 
   useEffect(() => {
@@ -66,7 +76,7 @@ const POS = () => {
             };
 
             setTimeout(() => {
-                handleProcessSale('Stripe', discountInfo);
+                handleProcessSale('card', discountInfo);
                 localStorage.removeItem('pending_checkout_cart');
                 localStorage.removeItem('pending_checkout_customer');
                 localStorage.removeItem('pending_checkout_discount');
@@ -237,6 +247,12 @@ const POS = () => {
             onClose={() => setLastSale(null)}
             sale={lastSale}
         />
+        {console.log('POS render - lastSale:', lastSale)}
+        {console.log('POS render - lastSale type:', typeof lastSale)}
+        {console.log('POS render - lastSale keys:', lastSale ? Object.keys(lastSale) : 'null')}
+        {console.log('POS render - lastSale items:', lastSale?.items)}
+        {console.log('POS render - lastSale total:', lastSale?.total)}
+        {console.log('POS render - lastSale subtotal:', lastSale?.subtotal)}
     </div>
   );
 };

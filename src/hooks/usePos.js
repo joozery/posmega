@@ -168,12 +168,15 @@ export const usePos = () => {
             // Create sale data
             const saleData = {
                 customerId: selectedCustomer ? selectedCustomer.id : null,
-                items: (cart || []).map(item => ({
-                    productId: item.id,
-                    quantity: item.quantity || 0,
-                    price: item.price || 0,
-                    total: (item.price || 0) * (item.quantity || 0)
-                })),
+                items: (cart || []).map(item => {
+                    console.log('Creating sale item from cart item:', item);
+                    return {
+                        productId: item.id,
+                        quantity: item.quantity || 0,
+                        price: item.price || 0,
+                        total: (item.price || 0) * (item.quantity || 0)
+                    };
+                }),
                 subtotal,
                 discount: discountInfo.discountAmount,
                 tax,
@@ -186,9 +189,14 @@ export const usePos = () => {
                     : 0
             };
 
+            console.log('Sending sale data:', saleData);
+            console.log('Cart items:', cart);
+            console.log('Sale data items:', saleData.items);
+            console.log('Auth token:', localStorage.getItem('auth_token'));
+
             // Save sale to API
             try {
-                const saleResponse = await fetch('/api/sales', {
+                const saleResponse = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/sales', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -197,11 +205,24 @@ export const usePos = () => {
                     body: JSON.stringify(saleData)
                 });
 
+                console.log('Sale response status:', saleResponse.status);
+                console.log('Sale response headers:', saleResponse.headers);
+
                 if (!saleResponse.ok) {
-                    throw new Error('Failed to save sale');
+                    const errorText = await saleResponse.text();
+                    console.error('Sale API error response:', errorText);
+                    throw new Error(`Failed to save sale: ${saleResponse.status} - ${errorText}`);
                 }
 
                 const sale = await saleResponse.json();
+                console.log('Sale saved successfully:', sale);
+                console.log('Sale data structure:', JSON.stringify(sale, null, 2));
+                console.log('Sale items:', sale.sale?.items);
+                console.log('Sale total:', sale.sale?.total);
+                console.log('Sale subtotal:', sale.sale?.subtotal);
+                console.log('Sale response keys:', Object.keys(sale));
+                console.log('Sale.sale keys:', sale.sale ? Object.keys(sale.sale) : 'no sale property');
+                console.log('Full sale response:', sale);
 
                 // Update customer loyalty points if applicable
                 if (selectedCustomer) {
@@ -254,12 +275,46 @@ export const usePos = () => {
                 closeLoading();
                 setCart([]);
                 setSelectedCustomer(null);
-                return sale;
+                toast({ title: "บันทึกการขายสำเร็จ", description: `ยอดขาย: ${total.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}` });
+                console.log('Sale completed successfully:', sale);
+                console.log('Returning sale object:', sale.sale || sale);
+                console.log('Sale object structure:', {
+                    hasSaleProperty: !!sale.sale,
+                    saleKeys: sale.sale ? Object.keys(sale.sale) : 'no sale property',
+                    directKeys: Object.keys(sale)
+                });
+                
+                // Ensure the returned sale object has all required fields
+                const finalSale = sale.sale || sale;
+                console.log('Final sale before processing:', finalSale);
+                console.log('Final sale items before processing:', finalSale.items);
+                
+                if (!finalSale.items || finalSale.items.length === 0) {
+                    // If items are missing, create them from cart
+                    console.log('Creating items from cart because items are missing or empty');
+                    finalSale.items = (cart || []).map(item => {
+                        console.log('Creating final sale item from cart item:', item);
+                        return {
+                            id: item.id,
+                            product_id: item.id,
+                            product_name: item.name,
+                            name: item.name,
+                            quantity: item.quantity || 0,
+                            price: item.price || 0,
+                            total: (item.price || 0) * (item.quantity || 0)
+                        };
+                    });
+                }
+                
+                console.log('Final sale items:', finalSale.items);
+                console.log('Final sale items length:', finalSale.items?.length);
+                
+                return finalSale;
                 
             } catch (error) {
                 console.error('Error saving sale:', error);
                 closeLoading();
-                showError('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกการขายได้');
+                showError('เกิดข้อผิดพลาด', `ไม่สามารถบันทึกการขายได้: ${error.message}`);
                 return null;
             }
             

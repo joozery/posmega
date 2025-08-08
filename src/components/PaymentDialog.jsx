@@ -72,17 +72,26 @@ const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, disc
       localStorage.removeItem('pending_checkout_customer');
       localStorage.removeItem('pending_checkout_discount');
       setView('options');
+    } else {
+      // If no error, the user will be redirected to Stripe
+      // The actual payment confirmation will be handled in POS.jsx when they return
+      handleStripePayment();
     }
   }, [stripe, settings, cart, customer, total, discount, toast]);
 
   const handleCashPayment = () => {
-    onConfirm('เงินสด');
+    onConfirm('cash');
     toast({ title: "รับชำระด้วยเงินสด", description: "บันทึกการขายเรียบร้อยแล้ว" });
   };
   
   const handlePromptPayConfirmation = () => {
-    onConfirm('PromptPay QR');
+    onConfirm('promptpay');
     toast({ title: "ยืนยันการชำระเงินสำเร็จ", description: `บันทึกการขายผ่าน PromptPay QR เรียบร้อยแล้ว` });
+  };
+
+  const handleStripePayment = () => {
+    onConfirm('card');
+    toast({ title: "ยืนยันการชำระเงินสำเร็จ", description: `บันทึกการขายผ่านบัตรเครดิตเรียบร้อยแล้ว` });
   };
 
   const renderContent = () => {

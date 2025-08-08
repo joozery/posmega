@@ -60,12 +60,12 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
         showSuccessToast('ยกเลิกการใช้แต้มสะสมแล้ว');
     };
 
-    const handleConfirmPayment = (paymentMethod) => {
+    const handleConfirmPayment = async (paymentMethod) => {
         const discountInfo = {
             pointsUsed: discount > 0 ? parseInt(pointsToUse) : 0,
             discountAmount: discount
         };
-        const saleData = onProcessSale(paymentMethod, discountInfo);
+        const saleData = await onProcessSale(paymentMethod, discountInfo);
         if (saleData) {
             setIsPaymentDialogOpen(false);
         }
