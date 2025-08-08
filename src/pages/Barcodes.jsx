@@ -5,6 +5,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { Barcode, Printer, Search, Image as ImageIcon } from 'lucide-react';
 import PrintBarcodesDialog from '@/components/PrintBarcodesDialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { productService } from '@/services/productService';
+import { showError, showLoading, closeLoading } from '@/utils/sweetalert';
 
 const Barcodes = () => {
     const { toast } = useToast();
@@ -13,15 +15,37 @@ const Barcodes = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
     const [columns, setColumns] = useState(4);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const loadProducts = async () => {
+        try {
+            setLoading(true);
+            setError(null);
+            showLoading('กำลังโหลดข้อมูลสินค้า...');
+            
+            const response = await productService.getAllProducts();
+            const productsArray = response.products || [];
+            setProducts(productsArray);
+            
+            closeLoading();
+        } catch (error) {
+            console.error('Error loading products:', error);
+            setError('ไม่สามารถโหลดข้อมูลสินค้าได้');
+            closeLoading();
+            showError('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลสินค้าได้');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        const savedProducts = localStorage.getItem('pos_products');
-        setProducts(savedProducts ? JSON.parse(savedProducts) : []);
+        loadProducts();
     }, []);
 
     const filteredProducts = products.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
+        (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
     const handleSelectProduct = (productId, checked) => {
@@ -121,7 +145,7 @@ const Barcodes = () => {
                                 </th>
                                 <th className="py-4 px-6 w-20"></th>
                                 <th className="text-left py-4 px-6 font-medium text-gray-900">สินค้า</th>
-                                <th className="text-left py-4 px-6 font-medium text-gray-900">SKU</th>
+                                <th className="text-left py-4 px-6 font-medium text-gray-900">Barcode</th>
                                 <th className="text-right py-4 px-6 font-medium text-gray-900">ราคา</th>
                                 <th className="text-center py-4 px-6 font-medium text-gray-900 w-40">จำนวนป้าย</th>
                             </tr>
@@ -137,11 +161,11 @@ const Barcodes = () => {
                                     </td>
                                     <td className="py-2 px-6">
                                         <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center overflow-hidden">
-                                            {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-400" />}
+                                            {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-gray-400" />}
                                         </div>
                                     </td>
                                     <td className="py-4 px-6 font-medium text-gray-900">{product.name}</td>
-                                    <td className="py-4 px-6 text-gray-600">{product.sku}</td>
+                                    <td className="py-4 px-6 text-gray-600">{product.barcode || '-'}</td>
                                     <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString()}</td>
                                     <td className="py-4 px-6">
                                         {selectedProducts[product.id] && (

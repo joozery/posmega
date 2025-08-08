@@ -72,8 +72,8 @@ function App() {
           ) : (
             <Layout>
               <Routes>
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
-                <Route path="/login" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/" element={<Navigate to="/pos" replace />} />
+                <Route path="/login" element={<Navigate to="/pos" replace />} />
                 
                 <Route path="/dashboard" element={
                   <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>

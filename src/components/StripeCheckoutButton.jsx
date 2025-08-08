@@ -43,7 +43,7 @@ const StripeCheckoutButton = ({ cart, customer, taxRate }) => {
         currency: 'thb',
         product_data: {
           name: item.name,
-          images: item.imageUrl ? [item.imageUrl] : [],
+          images: item.image_url ? [item.image_url] : [],
         },
         unit_amount: Math.round(item.price * 100),
       },

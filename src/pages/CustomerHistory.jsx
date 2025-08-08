@@ -46,9 +46,9 @@ const CustomerHistory = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(customer => 
-        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        customer.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        (customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (customer.phone && customer.phone.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -277,7 +277,7 @@ const CustomerHistory = () => {
                     <div className="flex items-center">
                       <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
-                          {customer.name.charAt(0).toUpperCase()}
+                          {customer.name && customer.name.length > 0 ? customer.name.charAt(0).toUpperCase() : '?'}
                         </span>
                       </div>
                       <div className="ml-4">

@@ -9,13 +9,24 @@ import {
   AlertTriangle,
   Filter,
   Image as ImageIcon,
-  Barcode
+  Barcode,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import ProductDialog from '@/components/ProductDialog';
 import { usePos } from '@/hooks/usePos';
 import { useNavigate } from 'react-router-dom';
+import { productService } from '@/services/productService';
+import { 
+  showSuccess, 
+  showError, 
+  showDeleteConfirm, 
+  showLoading, 
+  closeLoading,
+  showSuccessToast,
+  showErrorToast
+} from '@/utils/sweetalert';
 
 const Products = () => {
   const { toast } = useToast();
@@ -26,14 +37,40 @@ const Products = () => {
   const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   
   const { categories: posCategories } = usePos();
 
+  // Load products from API
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      showLoading('กำลังโหลดข้อมูลสินค้า...');
+      
+      const response = await productService.getAllProducts();
+      const productsArray = response.products || [];
+      setProducts(productsArray);
+      
+      // Extract unique categories from products
+      const uniqueCategories = [...new Set(productsArray.map(p => p.category).filter(Boolean))];
+      setCategories(uniqueCategories);
+      
+      closeLoading();
+    } catch (error) {
+      console.error('Error loading products:', error);
+      setError('ไม่สามารถโหลดข้อมูลสินค้าได้');
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลสินค้าได้');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const savedProducts = localStorage.getItem('pos_products');
-    setProducts(savedProducts ? JSON.parse(savedProducts) : []);
-    setCategories(posCategories);
-  }, [posCategories]);
+    loadProducts();
+  }, []);
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -42,49 +79,54 @@ const Products = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const updateAndSaveProducts = (updatedProducts) => {
-      setProducts(updatedProducts);
-      localStorage.setItem('pos_products', JSON.stringify(updatedProducts));
-      window.dispatchEvent(new Event('storage'));
-  }
-
-  const updateAndSaveCategories = (updatedCategories) => {
-    setCategories(updatedCategories);
-    localStorage.setItem('pos_categories', JSON.stringify(updatedCategories));
-    window.dispatchEvent(new Event('storage'));
-  }
-  
   const handleAddCategory = (newCategory) => {
       if (!categories.includes(newCategory)) {
           const updated = [...categories, newCategory];
-          updateAndSaveCategories(updated);
-          toast({ title: 'เพิ่มหมวดหมู่สำเร็จ', description: `หมวดหมู่ "${newCategory}" ถูกเพิ่มแล้ว`});
+          setCategories(updated);
+          showSuccessToast(`หมวดหมู่ "${newCategory}" ถูกเพิ่มแล้ว`);
       }
   }
 
-  const saveProduct = (productData) => {
-    let updatedProducts;
-    
-    if (editingProduct) {
-      updatedProducts = products.map(p => 
-        p.id === editingProduct.id ? { ...editingProduct, ...productData } : p
-      );
-      toast({ title: "แก้ไขสินค้าสำเร็จ", description: `${productData.name} ถูกแก้ไขแล้ว` });
-    } else {
-      const newProduct = { ...productData, id: Date.now() };
-      updatedProducts = [...products, newProduct];
-      toast({ title: "เพิ่มสินค้าสำเร็จ", description: `${productData.name} ถูกเพิ่มแล้ว` });
+  const saveProduct = async (productData) => {
+    try {
+      showLoading('กำลังบันทึกข้อมูล...');
+      
+      if (editingProduct) {
+        // Update existing product
+        await productService.updateProduct(editingProduct.id, productData);
+        showSuccess('แก้ไขสินค้าสำเร็จ', `${productData.name} ถูกแก้ไขแล้ว`);
+      } else {
+        // Create new product
+        await productService.createProduct(productData);
+        showSuccess('เพิ่มสินค้าสำเร็จ', `${productData.name} ถูกเพิ่มแล้ว`);
+      }
+      
+      // Reload products to get updated data
+      await loadProducts();
+      setIsDialogOpen(false);
+      setEditingProduct(null);
+    } catch (error) {
+      console.error('Error saving product:', error);
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลสินค้าได้');
     }
-    
-    updateAndSaveProducts(updatedProducts);
-    setIsDialogOpen(false);
-    setEditingProduct(null);
   };
 
-  const deleteProduct = (id) => {
-    const updatedProducts = products.filter(p => p.id !== id);
-    updateAndSaveProducts(updatedProducts);
-    toast({ title: "ลบสินค้าสำเร็จ", description: "สินค้าถูกลบออกจากระบบแล้ว", variant: 'destructive' });
+  const deleteProduct = async (id) => {
+    try {
+      const result = await showDeleteConfirm('ยืนยันการลบสินค้า', 'คุณต้องการลบสินค้านี้หรือไม่?');
+      
+      if (result.isConfirmed) {
+        showLoading('กำลังลบสินค้า...');
+        await productService.deleteProduct(id);
+        await loadProducts(); // Reload products
+        showSuccess('ลบสินค้าสำเร็จ', 'สินค้าถูกลบออกจากระบบแล้ว');
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถลบสินค้าได้');
+    }
   };
 
   const editProduct = (product) => {
@@ -98,6 +140,33 @@ const Products = () => {
   };
 
   const lowStockProducts = products.filter(p => p.stock <= 10);
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">กำลังโหลดข้อมูลสินค้า...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertTriangle className="w-8 h-8 mx-auto mb-4 text-red-600" />
+          <p className="text-gray-600 mb-4">{error}</p>
+          <Button onClick={loadProducts}>
+            ลองใหม่
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -168,7 +237,7 @@ const Products = () => {
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="py-2 px-6">
                     <div className="w-12 h-12 rounded-md bg-gray-100 flex items-center justify-center overflow-hidden">
-                      {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover"/> : <ImageIcon className="w-6 h-6 text-gray-400"/>}
+                      {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover"/> : <ImageIcon className="w-6 h-6 text-gray-400"/>}
                     </div>
                   </td>
                   <td className="py-4 px-6">
@@ -188,7 +257,7 @@ const Products = () => {
                       </div>
                     )}
                   </td>
-                  <td className="py-4 px-6 text-gray-600">{product.sku}</td>
+                  <td className="py-4 px-6 text-gray-600">{product.barcode || '-'}</td>
                   <td className="py-4 px-6"><span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">{product.category}</span></td>
                   <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString()}</td>
                   <td className="py-4 px-6 text-center"><span className={`font-medium ${product.stock <= 10 ? 'text-red-600' : product.stock <= 20 ? 'text-orange-600' : 'text-green-600'}`}>{product.stock}</span></td>
@@ -208,13 +277,13 @@ const Products = () => {
         {filteredProducts.map((product) => (
           <div key={product.id} className="bg-white rounded-xl shadow-sm border p-4 flex space-x-4">
             <div className="w-20 h-20 rounded-md bg-gray-100 flex items-center justify-center overflow-hidden flex-shrink-0">
-               {product.image ? <img src={product.image} alt={product.name} className="w-full h-full object-cover"/> : <ImageIcon className="w-8 h-8 text-gray-400"/>}
+               {product.image_url ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover"/> : <ImageIcon className="w-8 h-8 text-gray-400"/>}
             </div>
             <div className="flex-grow">
               <div className="flex justify-between items-start">
                 <div>
                   <p className="font-bold text-gray-900">{product.name}</p>
-                  <p className="text-sm text-gray-500">SKU: {product.sku}</p>
+                  <p className="text-sm text-gray-500">Barcode: {product.barcode || '-'}</p>
                   {(product.sizes?.length > 0 || product.colors?.length > 0) && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {product.sizes?.map((size, index) => (

@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Customers Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { border: 1px solid #ddd; padding: 15px; margin: 10px 0; border-radius: 4px; }
+        .success { background: #d4edda; color: #155724; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .error { background: #f8d7da; color: #721c24; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        .warning { background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin: 10px 0; }
+        button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #0056b3; }
+        input { padding: 8px; margin: 5px; border: 1px solid #ccc; border-radius: 4px; }
+        .status { font-weight: bold; }
+        .status.connected { color: #28a745; }
+        .status.disconnected { color: #dc3545; }
+        .status.warning { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <h1>Test Customers Page API Connection</h1>
+    
+    <div>
+        <input type="text" id="token" placeholder="Enter auth token" style="width: 400px;">
+        <button onclick="testLogin()">Test Login</button>
+        <button onclick="testCustomersPage()">Test Customers Page</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+    
+    <div id="result"></div>
+    
+    <div class="test-section">
+        <h3>API Connection Tests</h3>
+        
+        <div>
+            <h4>1. Authentication Test</h4>
+            <button onclick="testAuth()">Test Authentication</button>
+            <div id="authResult"></div>
+        </div>
+        
+        <div>
+            <h4>2. Customers API Test</h4>
+            <button onclick="testCustomersAPI()">Test GET /customers</button>
+            <div id="customersResult"></div>
+        </div>
+        
+        <div>
+            <h4>3. Create Customer Test</h4>
+            <button onclick="testCreateCustomer()">Test POST /customers</button>
+            <div id="createResult"></div>
+        </div>
+        
+        <div>
+            <h4>4. Update Customer Test</h4>
+            <button onclick="testUpdateCustomer()">Test PUT /customers/:id</button>
+            <div id="updateResult"></div>
+        </div>
+        
+        <div>
+            <h4>5. Delete Customer Test</h4>
+            <button onclick="testDeleteCustomer()">Test DELETE /customers/:id</button>
+            <div id="deleteResult"></div>
+        </div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Frontend Integration Tests</h3>
+        
+        <div>
+            <h4>1. CustomerService Test</h4>
+            <button onclick="testCustomerService()">Test CustomerService Methods</button>
+            <div id="serviceResult"></div>
+        </div>
+        
+        <div>
+            <h4>2. Page Navigation Test</h4>
+            <button onclick="testPageNavigation()">Test Page Navigation</button>
+            <div id="navigationResult"></div>
+        </div>
+    </div>
+    
+    <script>
+        let currentCustomerId = null;
+        
+        async function testLogin() {
+            const username = 'admin';
+            const password = 'admin123';
+            
+            try {
+                const response = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('token').value = data.token;
+                    showSuccess('Login successful! Token saved.');
+                } else {
+                    showError(`Login failed: ${data.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                showError(`Network error: ${error.message}`);
+            }
+        }
+        
+        async function testAuth() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/customers', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    document.getElementById('authResult').innerHTML = `
+                        <div class="success">
+                            <span class="status connected">✅ Connected</span>
+                            <p>Authentication successful. Token is valid.</p>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('authResult').innerHTML = `
+                        <div class="error">
+                            <span class="status disconnected">❌ Disconnected</span>
+                            <p>Authentication failed. Status: ${response.status}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('authResult').innerHTML = `
+                    <div class="error">
+                        <span class="status disconnected">❌ Disconnected</span>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testCustomersAPI() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/customers', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const customers = data.customers || [];
+                    document.getElementById('customersResult').innerHTML = `
+                        <div class="success">
+                            <span class="status connected">✅ Connected</span>
+                            <p>Found ${customers.length} customers</p>
+                            <p>Response: ${JSON.stringify(data, null, 2)}</p>
+                        </div>
+                    `;
+                    
+                    if (customers.length > 0) {
+                        currentCustomerId = customers[0].id;
+                    }
+                } else {
+                    document.getElementById('customersResult').innerHTML = `
+                        <div class="error">
+                            <span class="status disconnected">❌ Failed</span>
+                            <p>Error: ${data.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('customersResult').innerHTML = `
+                    <div class="error">
+                        <span class="status disconnected">❌ Failed</span>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testCreateCustomer() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            const customerData = {
+                name: 'คุณทดสอบ ระบบ',
+                phone: '081-234-5678',
+                email: 'test@example.com',
+                address: '123 ถนนทดสอบ ต.ทดสอบ อ.เมือง จ.ทดสอบ 12345'
+            };
+            
+            try {
+                const response = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/customers', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(customerData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentCustomerId = data.customer.id;
+                    document.getElementById('createResult').innerHTML = `
+                        <div class="success">
+                            <span class="status connected">✅ Success</span>
+                            <p>Customer created with ID: ${data.customer.id}</p>
+                            <p>Response: ${JSON.stringify(data, null, 2)}</p>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('createResult').innerHTML = `
+                        <div class="error">
+                            <span class="status disconnected">❌ Failed</span>
+                            <p>Error: ${data.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('createResult').innerHTML = `
+                    <div class="error">
+                        <span class="status disconnected">❌ Failed</span>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testUpdateCustomer() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            if (!currentCustomerId) {
+                showError('Please create a customer first');
+                return;
+            }
+            
+            const updateData = {
+                name: 'คุณทดสอบ ระบบ (Updated)',
+                phone: '081-234-5678',
+                email: 'test.updated@example.com',
+                address: '123 ถนนทดสอบ ต.ทดสอบ อ.เมือง จ.ทดสอบ 12345 (Updated)'
+            };
+            
+            try {
+                const response = await fetch(`https://posmega-backend-786f2703830d.herokuapp.com/api/customers/${currentCustomerId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(updateData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('updateResult').innerHTML = `
+                        <div class="success">
+                            <span class="status connected">✅ Success</span>
+                            <p>Customer updated successfully</p>
+                            <p>Response: ${JSON.stringify(data, null, 2)}</p>
+                        </div>
+                    `;
+                } else {
+                    document.getElementById('updateResult').innerHTML = `
+                        <div class="error">
+                            <span class="status disconnected">❌ Failed</span>
+                            <p>Error: ${data.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('updateResult').innerHTML = `
+                    <div class="error">
+                        <span class="status disconnected">❌ Failed</span>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        async function testDeleteCustomer() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            if (!currentCustomerId) {
+                showError('Please create a customer first');
+                return;
+            }
+            
+            if (!confirm(`Are you sure you want to delete customer ID: ${currentCustomerId}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`https://posmega-backend-786f2703830d.herokuapp.com/api/customers/${currentCustomerId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('deleteResult').innerHTML = `
+                        <div class="success">
+                            <span class="status connected">✅ Success</span>
+                            <p>Customer deleted successfully</p>
+                            <p>Response: ${JSON.stringify(data, null, 2)}</p>
+                        </div>
+                    `;
+                    currentCustomerId = null;
+                } else {
+                    document.getElementById('deleteResult').innerHTML = `
+                        <div class="error">
+                            <span class="status disconnected">❌ Failed</span>
+                            <p>Error: ${data.error || 'Unknown error'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                document.getElementById('deleteResult').innerHTML = `
+                    <div class="error">
+                        <span class="status disconnected">❌ Failed</span>
+                        <p>Network error: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function testCustomerService() {
+            // Check if customerService exists
+            if (typeof window.customerService !== 'undefined') {
+                document.getElementById('serviceResult').innerHTML = `
+                    <div class="success">
+                        <span class="status connected">✅ Available</span>
+                        <p>CustomerService is available in the application</p>
+                    </div>
+                `;
+            } else {
+                document.getElementById('serviceResult').innerHTML = `
+                    <div class="warning">
+                        <span class="status warning">⚠️ Not Available</span>
+                        <p>CustomerService is not available in this test environment</p>
+                        <p>This is expected in the test page</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function testPageNavigation() {
+            // Check if we can navigate to the customers page
+            const customersUrl = 'http://localhost:5174/customers';
+            
+            document.getElementById('navigationResult').innerHTML = `
+                <div class="success">
+                    <span class="status connected">✅ Available</span>
+                    <p>Customers page should be available at: <a href="${customersUrl}" target="_blank">${customersUrl}</a></p>
+                    <p>Click the link to test the page navigation</p>
+                </div>
+            `;
+        }
+        
+        function testCustomersPage() {
+            const token = document.getElementById('token').value;
+            
+            if (!token) {
+                showError('Please login first');
+                return;
+            }
+            
+            // Run all tests
+            testAuth();
+            setTimeout(() => testCustomersAPI(), 1000);
+            setTimeout(() => testCreateCustomer(), 2000);
+            setTimeout(() => testUpdateCustomer(), 3000);
+            setTimeout(() => testDeleteCustomer(), 4000);
+            setTimeout(() => testCustomerService(), 5000);
+            setTimeout(() => testPageNavigation(), 6000);
+            
+            showSuccess('Running all tests... Check results below.');
+        }
+        
+        function clearResults() {
+            document.getElementById('result').innerHTML = '';
+            document.getElementById('authResult').innerHTML = '';
+            document.getElementById('customersResult').innerHTML = '';
+            document.getElementById('createResult').innerHTML = '';
+            document.getElementById('updateResult').innerHTML = '';
+            document.getElementById('deleteResult').innerHTML = '';
+            document.getElementById('serviceResult').innerHTML = '';
+            document.getElementById('navigationResult').innerHTML = '';
+        }
+        
+        function showSuccess(message) {
+            const toast = document.createElement('div');
+            toast.className = 'success';
+            toast.style.position = 'fixed';
+            toast.style.top = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '1000';
+            toast.innerHTML = `<h4>Success</h4><p>${message}</p>`;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 3000);
+        }
+        
+        function showError(message) {
+            const toast = document.createElement('div');
+            toast.className = 'error';
+            toast.style.position = 'fixed';
+            toast.style.top = '20px';
+            toast.style.right = '20px';
+            toast.style.zIndex = '1000';
+            toast.innerHTML = `<h4>Error</h4><p>${message}</p>`;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                document.body.removeChild(toast);
+            }, 3000);
+        }
+        
+        // Auto-fill token from localStorage if available
+        window.onload = function() {
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+                document.getElementById('token').value = token;
+            }
+        };
+    </script>
+</body>
+</html> 

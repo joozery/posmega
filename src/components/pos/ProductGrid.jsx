@@ -18,11 +18,20 @@ const ProductCard = ({ product, onAddToCart }) => (
             </div>
         )}
         <div className="aspect-square bg-gray-100 rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-            {product.image ? (
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+            {product.image_url ? (
+                <img 
+                    src={product.image_url} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                    }}
+                />
             ) : (
                 <Package className="w-1/2 h-1/2 text-gray-300" />
             )}
+            <Package className="w-1/2 h-1/2 text-gray-300" style={{ display: 'none' }} />
         </div>
         <h3 className="font-semibold text-gray-800 text-sm mb-1 line-clamp-2 flex-grow">{product.name}</h3>
         <div className="flex items-end justify-between mt-2">

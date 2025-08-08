@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Package, PlusCircle, UploadCloud, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JsBarcode from 'jsbarcode';
+import { showError, showInput } from '@/utils/sweetalert';
 
 const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCategory }) => {
   const [formData, setFormData] = useState({
@@ -26,7 +27,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
         cost: product.cost || '',
         stock: product.stock || '',
         description: product.description || '',
-        image: product.image || null,
+        image: product.image_url || null,
         originalPrice: product.originalPrice || '',
         sizes: product.sizes || [],
         colors: product.colors || []
@@ -46,17 +47,29 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
   useEffect(() => {
     if (barcodeRef.current && formData.sku) {
       try {
-        JsBarcode(barcodeRef.current, formData.sku, {
+        JsBarcode(barcodeRef.current, formData.barcode, {
           format: "CODE128", displayValue: true, fontSize: 16, width: 2, height: 80, margin: 10
         });
       } catch (e) {
         console.error("Barcode generation error:", e);
       }
     }
-  }, [formData.sku, isOpen]);
+  }, [formData.barcode, isOpen]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Validation
+    if (!formData.name.trim()) {
+      showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อสินค้า');
+      return;
+    }
+    
+    if (!formData.price || parseFloat(formData.price) <= 0) {
+      showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกราคาสินค้า');
+      return;
+    }
+    
     onSave({
       ...formData,
       price: parseFloat(formData.price) || 0,
@@ -81,12 +94,14 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     }
   };
 
-  const handleAddNewCategory = () => {
+  const handleAddNewCategory = async () => {
     if (newCategory.trim() !== '') {
       onAddCategory(newCategory.trim());
       handleChange('category', newCategory.trim());
       setIsAddingCategory(false);
       setNewCategory('');
+    } else {
+      showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อหมวดหมู่');
     }
   };
 

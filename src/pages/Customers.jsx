@@ -11,11 +11,14 @@ import {
   Mail,
   MapPin,
   Calendar,
-  Star
+  Star,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import CustomerDialog from '@/components/CustomerDialog';
+import { customerService } from '@/services/customerService';
+import { showError, showLoading, closeLoading } from '@/utils/sweetalert';
 
 const Customers = () => {
   const { toast } = useToast();
@@ -23,99 +26,124 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const savedCustomers = localStorage.getItem('pos_customers');
-    if (savedCustomers) {
-      setCustomers(JSON.parse(savedCustomers));
-    } else {
-      const defaultCustomers = [
-        {
-          id: 1,
-          name: 'คุณสมชาย ใจดี',
-          phone: '081-234-5678',
-          email: 'somchai@email.com',
-          address: '123 ถนนสุขุมวิท แขวงคลองเตย เขตคลองเตย กรุงเทพฯ 10110',
-          totalPurchases: 15420,
-          lastPurchase: '2024-06-15',
-          joinDate: '2024-01-15',
-          loyaltyPoints: 154
-        },
-        {
-          id: 2,
-          name: 'คุณสมหญิง รักดี',
-          phone: '082-345-6789',
-          email: 'somying@email.com',
-          address: '456 ถนนพหลโยธิน แขวงลาดยาว เขตจตุจักร กรุงเทพฯ 10900',
-          totalPurchases: 8950,
-          lastPurchase: '2024-06-18',
-          joinDate: '2024-02-20',
-          loyaltyPoints: 89
-        },
-        {
-          id: 3,
-          name: 'คุณสมศักดิ์ มีสุข',
-          phone: '083-456-7890',
-          email: 'somsak@email.com',
-          address: '789 ถนนรัชดาภิเษก แขวงดินแดง เขตดินแดง กรุงเทพฯ 10400',
-          totalPurchases: 23100,
-          lastPurchase: '2024-06-20',
-          joinDate: '2023-12-10',
-          loyaltyPoints: 231
-        }
-      ];
-      setCustomers(defaultCustomers);
-      localStorage.setItem('pos_customers', JSON.stringify(defaultCustomers));
-    }
+    loadCustomers();
   }, []);
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (customer.phone && customer.phone.includes(searchTerm)) ||
-    (customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
-  const saveCustomer = (customerData) => {
-    let updatedCustomers;
-    
-    if (editingCustomer) {
-      updatedCustomers = customers.map(c => 
-        c.id === editingCustomer.id ? { ...c, ...customerData } : c
-      );
-      toast({
-        title: "แก้ไขลูกค้าสำเร็จ",
-        description: `${customerData.name} ถูกแก้ไขแล้ว`
-      });
-    } else {
-      const newCustomer = {
-        ...customerData,
-        id: Date.now(),
-        totalPurchases: 0,
-        lastPurchase: null,
-        joinDate: new Date().toISOString().split('T')[0],
-        loyaltyPoints: 0
-      };
-      updatedCustomers = [...customers, newCustomer];
-      toast({
-        title: "เพิ่มลูกค้าสำเร็จ",
-        description: `${customerData.name} ถูกเพิ่มแล้ว`
-      });
+  const loadCustomers = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      showLoading('กำลังโหลดข้อมูลลูกค้า...');
+      
+      const response = await customerService.getAllCustomers();
+      const customersData = response.customers || [];
+      
+      // Transform customer data to match frontend expectations
+      const transformedCustomers = customersData.map(customer => ({
+        ...customer,
+        loyaltyPoints: customer.loyalty_points || 0,
+        totalPurchases: customer.total_purchases || 0,
+        lastPurchase: customer.last_purchase,
+        joinDate: customer.created_at ? customer.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+      }));
+      
+      setCustomers(transformedCustomers);
+      
+      closeLoading();
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      setError('ไม่สามารถโหลดข้อมูลลูกค้าได้');
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลลูกค้าได้');
+    } finally {
+      setLoading(false);
     }
-    
-    setCustomers(updatedCustomers);
-    localStorage.setItem('pos_customers', JSON.stringify(updatedCustomers));
-    setIsDialogOpen(false);
-    setEditingCustomer(null);
   };
 
-  const deleteCustomer = (id) => {
-    const updatedCustomers = customers.filter(c => c.id !== id);
-    setCustomers(updatedCustomers);
-    localStorage.setItem('pos_customers', JSON.stringify(updatedCustomers));
-    toast({
-      title: "ลบลูกค้าสำเร็จ",
-      description: "ข้อมูลลูกค้าถูกลบออกจากระบบแล้ว"
-    });
+  const filteredCustomers = customers.filter(customer =>
+    (customer.name && customer.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (customer.phone && customer.phone && customer.phone.includes(searchTerm)) ||
+    (customer.email && customer.email && customer.email.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
+
+  const saveCustomer = async (customerData) => {
+    try {
+      showLoading(editingCustomer ? 'กำลังแก้ไขลูกค้า...' : 'กำลังเพิ่มลูกค้า...');
+      
+      if (editingCustomer) {
+        // Update existing customer
+        await customerService.updateCustomer(editingCustomer.id, customerData);
+        const updatedCustomers = customers.map(c => 
+          c.id === editingCustomer.id ? { 
+            ...c, 
+            ...customerData,
+            loyaltyPoints: c.loyaltyPoints || 0,
+            totalPurchases: c.totalPurchases || 0,
+            lastPurchase: c.lastPurchase,
+            joinDate: c.joinDate
+          } : c
+        );
+        setCustomers(updatedCustomers);
+        toast({
+          title: "แก้ไขลูกค้าสำเร็จ",
+          description: `${customerData.name} ถูกแก้ไขแล้ว`
+        });
+      } else {
+        // Create new customer
+        const newCustomer = await customerService.createCustomer({
+          ...customerData,
+          totalPurchases: 0,
+          lastPurchase: null,
+          joinDate: new Date().toISOString().split('T')[0],
+          loyaltyPoints: 0
+        });
+        // Transform the customer data to match frontend expectations
+        const transformedCustomer = {
+          ...newCustomer,
+          loyaltyPoints: newCustomer.loyalty_points || 0,
+          totalPurchases: 0,
+          lastPurchase: null,
+          joinDate: newCustomer.created_at ? newCustomer.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+        };
+        setCustomers([...customers, transformedCustomer]);
+        toast({
+          title: "เพิ่มลูกค้าสำเร็จ",
+          description: `${customerData.name} ถูกเพิ่มแล้ว`
+        });
+      }
+      
+      closeLoading();
+      setIsDialogOpen(false);
+      setEditingCustomer(null);
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถบันทึกลูกค้าได้');
+    }
+  };
+
+  const deleteCustomer = async (id) => {
+    try {
+      showLoading('กำลังลบลูกค้า...');
+      
+      await customerService.deleteCustomer(id);
+      const updatedCustomers = customers.filter(c => c.id !== id);
+      setCustomers(updatedCustomers);
+      
+      closeLoading();
+      toast({
+        title: "ลบลูกค้าสำเร็จ",
+        description: "ข้อมูลลูกค้าถูกลบออกจากระบบแล้ว"
+      });
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถลบลูกค้าได้');
+    }
   };
 
   const editCustomer = (customer) => {
@@ -131,6 +159,35 @@ const Customers = () => {
   const totalCustomers = customers.length;
   const totalRevenue = customers.reduce((sum, c) => sum + (c.totalPurchases || 0), 0);
   const avgPurchase = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">กำลังโหลดข้อมูลลูกค้า...</h2>
+          <p className="text-gray-500">กรุณารอสักครู่</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <Button onClick={loadCustomers}>ลองใหม่</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -189,13 +246,13 @@ const Customers = () => {
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                   <span className="text-white font-medium text-lg">
-                    {customer.name.charAt(0)}
+                    {customer.name && customer.name.length > 0 ? customer.name.charAt(0).toUpperCase() : '?'}
                   </span>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-900">{customer.name}</h3>
+                  <h3 className="font-semibold text-gray-900">{customer.name || 'ไม่มีชื่อ'}</h3>
                   <p className="text-sm text-gray-500">
-                    สมาชิกตั้งแต่ {new Date(customer.joinDate).toLocaleDateString('th-TH')}
+                                          สมาชิกตั้งแต่ {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString('th-TH') : 'ไม่ระบุ'}
                   </p>
                 </div>
               </div>
@@ -206,7 +263,7 @@ const Customers = () => {
             </div>
 
             <div className="space-y-3 flex-grow">
-              <div className="flex items-center space-x-2 text-sm text-gray-600"><Phone className="w-4 h-4" /><span>{customer.phone}</span></div>
+              <div className="flex items-center space-x-2 text-sm text-gray-600"><Phone className="w-4 h-4" /><span>{customer.phone || 'ไม่ระบุ'}</span></div>
               {customer.email && (<div className="flex items-center space-x-2 text-sm text-gray-600"><Mail className="w-4 h-4" /><span className="truncate">{customer.email}</span></div>)}
               {customer.address && (<div className="flex items-start space-x-2 text-sm text-gray-600"><MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" /><span className="line-clamp-2">{customer.address}</span></div>)}
             </div>

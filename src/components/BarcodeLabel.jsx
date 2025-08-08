@@ -34,9 +34,9 @@ const BarcodeLabel = ({ product, settings: propSettings }) => {
   }, [propSettings]);
 
   useEffect(() => {
-    if (barcodeRef.current && product.sku) {
+    if (barcodeRef.current && product.barcode) {
       try {
-        JsBarcode(barcodeRef.current, product.sku, {
+        JsBarcode(barcodeRef.current, product.barcode, {
           ...settings,
           displayValue: settings.showSku,
           lineColor: settings.lineColor, 
@@ -45,7 +45,7 @@ const BarcodeLabel = ({ product, settings: propSettings }) => {
         console.error("Barcode generation error:", e);
       }
     }
-  }, [product.sku, settings]);
+  }, [product.barcode, settings]);
 
   const priceParts = product.price.toLocaleString('en-US', { minimumFractionDigits: 2 }).split('.');
 

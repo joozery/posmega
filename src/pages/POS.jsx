@@ -10,6 +10,7 @@ import ReceiptDialog from '@/components/ReceiptDialog';
 import { Button } from '@/components/ui/button';
 import { ShoppingCart, Shield } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { showSuccessToast, showErrorToast } from '@/utils/sweetalert';
 
 const POS = () => {
   const { toast } = useToast();
@@ -27,6 +28,8 @@ const POS = () => {
     removeFromCart,
     processSale,
     handleSaveCustomer,
+    loading,
+    error,
   } = usePos();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -67,14 +70,14 @@ const POS = () => {
                 localStorage.removeItem('pending_checkout_cart');
                 localStorage.removeItem('pending_checkout_customer');
                 localStorage.removeItem('pending_checkout_discount');
-                toast({ title: "ชำระเงินผ่าน Stripe สำเร็จ!", description: "บันทึกการขายเรียบร้อย" });
+                showSuccessToast('ชำระเงินผ่าน Stripe สำเร็จ! บันทึกการขายเรียบร้อย');
             }, 0);
         }
     } else if (query.get("stripe_session") === "cancel") {
         localStorage.removeItem('pending_checkout_cart');
         localStorage.removeItem('pending_checkout_customer');
         localStorage.removeItem('pending_checkout_discount');
-        toast({ title: "การชำระเงินถูกยกเลิก", description: "คุณสามารถลองชำระเงินอีกครั้งได้", variant: "destructive" });
+        showErrorToast('การชำระเงินถูกยกเลิก คุณสามารถลองชำระเงินอีกครั้งได้');
     }
     
     if(query.has("stripe_session")){
@@ -96,8 +99,37 @@ const POS = () => {
     );
   }
 
-  const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  // แสดง loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">กำลังโหลดข้อมูล...</h2>
+          <p className="text-gray-500">กรุณารอสักครู่</p>
+        </div>
+      </div>
+    );
+  }
+
+  // แสดง error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>ลองใหม่</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredProducts = (products || []).filter(product => {
+    const matchesSearch = (product.name && product.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory = selectedCategory === 'ทั้งหมด' || product.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -110,7 +142,7 @@ const POS = () => {
     setIsCustomerDialogOpen(false);
   }
 
-  const totalItemsInCart = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const totalItemsInCart = (cart || []).reduce((sum, item) => sum + (item.quantity || 0), 0);
 
   return (
     <div className="h-full">
@@ -121,18 +153,18 @@ const POS = () => {
                     setSearchTerm={setSearchTerm}
                     selectedCategory={selectedCategory}
                     setSelectedCategory={setSelectedCategory}
-                    categories={['ทั้งหมด', ...categories]}
+                    categories={['ทั้งหมด', ...(Array.isArray(categories) ? categories : [])]}
                     searchInputRef={searchInputRef}
                 />
                 <div className="flex-1 overflow-y-auto scrollbar-hide pr-2 -mr-2 pb-20 lg:pb-0">
-                    <ProductGrid products={filteredProducts} onAddToCart={addToCart} />
+                    <ProductGrid products={filteredProducts || []} onAddToCart={addToCart} />
                 </div>
             </div>
 
             <div className="hidden lg:block lg:w-[380px] xl:w-[420px] flex-shrink-0">
                 <CartPanel
-                    cart={cart}
-                    customers={customers}
+                    cart={cart || []}
+                    customers={customers || []}
                     selectedCustomer={selectedCustomer}
                     onSelectCustomer={setSelectedCustomer}
                     onRemoveCustomer={() => setSelectedCustomer(null)}
@@ -145,7 +177,7 @@ const POS = () => {
         </div>
 
         <div className="lg:hidden">
-            {cart.length > 0 && (
+            {(cart || []).length > 0 && (
                 <div className="fixed bottom-6 right-6 z-40">
                     <Button
                         size="lg"
@@ -154,7 +186,7 @@ const POS = () => {
                     >
                         <ShoppingCart className="w-6 h-6" />
                         <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center">
-                            {totalItemsInCart}
+                            {totalItemsInCart || 0}
                         </span>
                     </Button>
                 </div>
@@ -178,8 +210,8 @@ const POS = () => {
                             className="fixed top-0 right-0 bottom-0 w-full max-w-md bg-background z-50"
                         >
                             <CartPanel
-                                cart={cart}
-                                customers={customers}
+                                cart={cart || []}
+                                customers={customers || []}
                                 selectedCustomer={selectedCustomer}
                                 onSelectCustomer={setSelectedCustomer}
                                 onRemoveCustomer={() => setSelectedCustomer(null)}

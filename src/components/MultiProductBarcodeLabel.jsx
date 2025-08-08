@@ -25,9 +25,9 @@ const BarcodeItem = ({ product }) => {
     }, []);
 
     useEffect(() => {
-        if (barcodeRef.current && product.sku && settings) {
+        if (barcodeRef.current && product.barcode && settings) {
             try {
-                JsBarcode(barcodeRef.current, product.sku, {
+                JsBarcode(barcodeRef.current, product.barcode, {
                     format: settings.format || "CODE128",
                     width: 1.5,
                     height: 40,
@@ -39,7 +39,7 @@ const BarcodeItem = ({ product }) => {
                 console.error("Barcode generation error:", e);
             }
         }
-    }, [product.sku, settings]);
+    }, [product.barcode, settings]);
 
     if (!settings) return null;
 
@@ -66,7 +66,7 @@ const BarcodeItem = ({ product }) => {
                 <svg ref={barcodeRef} className="w-full h-full"></svg>
             </div>
             {settings.showSku && (
-                <p className="text-xs font-mono mt-1">{product.sku}</p>
+                <p className="text-xs font-mono mt-1">{product.barcode}</p>
             )}
         </div>
     );

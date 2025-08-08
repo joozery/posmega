@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { X, Trash2, UserPlus, UserCheck, Star, Ticket, Tag } from 'lucide-react';
 import PaymentDialog from '@/components/PaymentDialog';
+import { showErrorToast, showSuccessToast } from '@/utils/sweetalert';
 
 const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemoveCustomer, onUpdateQuantity, onRemoveFromCart, onOpenCustomerDialog, onProcessSale, onClose }) => {
     const { toast } = useToast();
@@ -37,26 +38,26 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
     const handleApplyPoints = () => {
         const points = parseInt(pointsToUse);
         if (!selectedCustomer || !loyaltySettings || !points || points <= 0) {
-            toast({ title: "ข้อมูลไม่ถูกต้อง", description: "กรุณาใส่จำนวนแต้มที่ต้องการใช้", variant: "destructive" });
+            showErrorToast('กรุณาใส่จำนวนแต้มที่ต้องการใช้');
             return;
         }
         if (points > selectedCustomer.loyaltyPoints) {
-            toast({ title: "แต้มไม่เพียงพอ", description: `คุณมีแต้มสะสม ${selectedCustomer.loyaltyPoints} แต้ม`, variant: "destructive" });
+            showErrorToast(`คุณมีแต้มสะสม ${selectedCustomer.loyaltyPoints} แต้ม`);
             return;
         }
         const calculatedDiscount = points * loyaltySettings.onePointValueInBaht;
         if (calculatedDiscount > subtotal) {
-            toast({ title: "ใช้แต้มเกินยอดซื้อ", description: "ไม่สามารถใช้ส่วนลดเกินยอดรวมสินค้าได้", variant: "destructive" });
+            showErrorToast('ไม่สามารถใช้ส่วนลดเกินยอดรวมสินค้าได้');
             return;
         }
         setDiscount(calculatedDiscount);
-        toast({ title: "ใช้แต้มสำเร็จ", description: `รับส่วนลด ${calculatedDiscount.toLocaleString()} บาท` });
+        showSuccessToast(`รับส่วนลด ${calculatedDiscount.toLocaleString()} บาท`);
     };
 
     const handleRemoveDiscount = () => {
         setDiscount(0);
         setPointsToUse('');
-        toast({ title: "ยกเลิกส่วนลด", description: "ยกเลิกการใช้แต้มสะสมแล้ว" });
+        showSuccessToast('ยกเลิกการใช้แต้มสะสมแล้ว');
     };
 
     const handleConfirmPayment = (paymentMethod) => {
@@ -106,7 +107,24 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                 ) : (
                     cart.map(item => (
                         <div key={item.id} className="flex items-center gap-3">
-                            <img src={item.image} alt={item.name} className="w-16 h-16 rounded-md object-cover bg-gray-100" />
+                            {item.image_url ? (
+                                <img 
+                                    src={item.image_url} 
+                                    alt={item.name} 
+                                    className="w-16 h-16 rounded-md object-cover bg-gray-100"
+                                    onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextSibling.style.display = 'flex';
+                                    }}
+                                />
+                            ) : (
+                                <div className="w-16 h-16 rounded-md bg-gray-100 flex items-center justify-center">
+                                    <span className="text-gray-400 text-xs">📦</span>
+                                </div>
+                            )}
+                            <div className="w-16 h-16 rounded-md bg-gray-100 flex items-center justify-center" style={{ display: 'none' }}>
+                                <span className="text-gray-400 text-xs">📦</span>
+                            </div>
                             <div className="flex-1">
                                 <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
                                 <p className="text-xs text-gray-500">฿{item.price.toLocaleString()}</p>

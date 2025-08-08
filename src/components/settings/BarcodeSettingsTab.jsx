@@ -59,7 +59,7 @@ const BarcodeSettingsTab = () => {
 
     const sampleProduct = {
         name: "สินค้าตัวอย่าง",
-        sku: "SKU12345",
+        barcode: "123456789",
         price: 999.75,
         originalPrice: 1200,
     };
@@ -95,7 +95,7 @@ const BarcodeSettingsTab = () => {
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-2">
                             <div className="flex items-center space-x-2"><Switch id="showName" checked={settings.showName} onCheckedChange={(val) => handleSettingChange('showName', val)} /><label htmlFor="showName">ชื่อสินค้า</label></div>
                             <div className="flex items-center space-x-2"><Switch id="showPrice" checked={settings.showPrice} onCheckedChange={(val) => handleSettingChange('showPrice', val)} /><label htmlFor="showPrice">ราคา</label></div>
-                            <div className="flex items-center space-x-2"><Switch id="showSku" checked={settings.showSku} onCheckedChange={(val) => handleSettingChange('showSku', val)} /><label htmlFor="showSku">รหัส SKU</label></div>
+                            <div className="flex items-center space-x-2"><Switch id="showSku" checked={settings.showSku} onCheckedChange={(val) => handleSettingChange('showSku', val)} /><label htmlFor="showSku">รหัส Barcode</label></div>
                             <div className="flex items-center space-x-2"><Switch id="nameBold" checked={settings.nameBold} onCheckedChange={(val) => handleSettingChange('nameBold', val)} /><label htmlFor="nameBold">ชื่อตัวหนา</label></div>
                             <div className="flex items-center space-x-2"><Switch id="priceBold" checked={settings.priceBold} onCheckedChange={(val) => handleSettingChange('priceBold', val)} /><label htmlFor="priceBold">ราคาตัวหนา</label></div>
                         </div>

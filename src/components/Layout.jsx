@@ -23,11 +23,13 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import { useToast } from '@/components/ui/use-toast';
+import { settingsService } from '@/services/settingsService';
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [storeSettings, setStoreSettings] = useState(null);
+  const [loadingSettings, setLoadingSettings] = useState(true);
   const location = useLocation();
   const navigate = useNavigate();
   const { currentUser, logout, hasPermission } = useAuth();
@@ -51,13 +53,24 @@ const Layout = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    const loadStoreSettings = () => {
-      const saved = localStorage.getItem('pos_settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setStoreSettings(parsed.system || { storeName: 'Universal POS', logo: '' });
-      } else {
+    const loadStoreSettings = async () => {
+      try {
+        setLoadingSettings(true);
+        const response = await settingsService.getSettings();
+        const apiSettings = response.settings || {};
+        
+        // Map logo_url to logo for frontend compatibility
+        if (apiSettings.system && apiSettings.system.logo_url) {
+          apiSettings.system.logo = apiSettings.system.logo_url;
+        }
+        
+        setStoreSettings(apiSettings.system || { storeName: 'Universal POS', logo: '' });
+      } catch (error) {
+        console.error('Error loading store settings:', error);
+        // Fallback to default settings
         setStoreSettings({ storeName: 'Universal POS', logo: '' });
+      } finally {
+        setLoadingSettings(false);
       }
     };
 
@@ -113,19 +126,30 @@ const Layout = ({ children }) => {
         <div className="flex h-full flex-col">
           <div className="flex h-20 items-center justify-between px-6 border-b shrink-0">
              <motion.div animate={{ opacity: isCollapsed ? 0 : 1, width: isCollapsed ? 0 : 'auto' }} className="flex items-center space-x-3 overflow-hidden">
-              {storeSettings?.logo ? (
-                <img 
-                  src={storeSettings.logo} 
-                  alt="Store Logo" 
-                  className="w-10 h-10 object-contain rounded-lg shrink-0"
-                />
-              ) : (
-                <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0">
-                  <Store className="w-6 h-6 text-white" />
+              {loadingSettings ? (
+                <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center shrink-0 animate-pulse">
+                  <div className="w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
                 </div>
+              ) : (
+                <>
+                  {storeSettings?.logo ? (
+                    <img 
+                      src={storeSettings.logo} 
+                      alt="Store Logo" 
+                      className="w-10 h-10 object-contain rounded-lg shrink-0 border border-gray-200"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.nextSibling.style.display = 'flex';
+                      }}
+                    />
+                  ) : null}
+                  <div className={`w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shrink-0 ${storeSettings?.logo ? 'hidden' : ''}`}>
+                    <Store className="w-6 h-6 text-white" />
+                  </div>
+                </>
               )}
               <span className="text-xl font-bold text-gray-900 whitespace-nowrap">
-                {storeSettings?.storeName || 'Universal POS'}
+                {loadingSettings ? 'กำลังโหลด...' : (storeSettings?.storeName || 'Universal POS')}
               </span>
             </motion.div>
              <Button

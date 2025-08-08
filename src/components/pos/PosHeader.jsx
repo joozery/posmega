@@ -20,7 +20,7 @@ const PosHeader = ({ searchTerm, setSearchTerm, selectedCategory, setSelectedCat
                     <input
                         ref={searchInputRef}
                         type="text"
-                        placeholder="ค้นหาสินค้า (ชื่อ, SKU)..."
+                        placeholder="ค้นหาสินค้า (ชื่อ, Barcode)..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

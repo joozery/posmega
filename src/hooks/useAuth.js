@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/components/ui/use-toast';
+import { authService } from '@/services/authService';
 
 // กำหนดสิทธิ์การเข้าถึง
 export const PERMISSIONS = {
@@ -82,120 +83,73 @@ export const useAuth = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [users, setUsers] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // โหลดข้อมูลผู้ใช้
-  const loadUsers = useCallback(() => {
-    const savedUsers = localStorage.getItem('pos_users');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      // สร้าง admin เริ่มต้น
-      const defaultAdmin = {
-        id: 1,
-        username: 'admin',
-        password: 'admin123', // ควรเข้ารหัสในระบบจริง
-        name: 'ผู้ดูแลระบบ',
-        email: 'admin@example.com',
-        role: 'ADMIN',
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        lastLogin: null
-      };
-      setUsers([defaultAdmin]);
-      localStorage.setItem('pos_users', JSON.stringify([defaultAdmin]));
-    }
+  // Check authentication status on mount
+  useEffect(() => {
+    const checkAuth = () => {
+      const user = authService.getCurrentUser();
+      const token = authService.getToken();
+      
+      if (user && token) {
+        setCurrentUser(user);
+        setIsAuthenticated(true);
+      } else {
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+      }
+      setLoading(false);
+    };
+
+    checkAuth();
   }, []);
 
-  useEffect(() => {
-    loadUsers();
-  }, [loadUsers]);
-
-  useEffect(() => {
-    // ตรวจสอบ session หลังจาก users โหลดเสร็จ
-    console.log('Checking session, users count:', users.length);
-    if (users.length > 0) {
-      const session = localStorage.getItem('pos_session');
-      console.log('Session from localStorage:', session);
-      if (session) {
-        try {
-          const sessionData = JSON.parse(session);
-          console.log('Session data:', sessionData);
-          const user = users.find(u => u.id === sessionData.userId);
-          console.log('Found user:', user);
-          if (user && user.isActive) {
-            console.log('Setting authenticated user:', user);
-            setCurrentUser(user);
-            setIsAuthenticated(true);
-          } else {
-            console.log('User not found or inactive, removing session');
-            localStorage.removeItem('pos_session');
-          }
-        } catch (error) {
-          console.error('Error parsing session:', error);
-          localStorage.removeItem('pos_session');
-        }
-      }
-    }
-  }, [users]);
-
   // เข้าสู่ระบบ
-  const login = useCallback((username, password) => {
-    console.log('Login attempt:', { username, usersCount: users.length });
-    
-    const user = users.find(u => 
-      u.username === username && 
-      u.password === password && 
-      u.isActive
-    );
-
-    if (user) {
-      console.log('User found:', user);
+  const login = useCallback(async (username, password) => {
+    try {
+      const { user, token } = await authService.login(username, password);
       setCurrentUser(user);
       setIsAuthenticated(true);
-      
-      // อัพเดท lastLogin
-      const updatedUsers = users.map(u => 
-        u.id === user.id 
-          ? { ...u, lastLogin: new Date().toISOString() }
-          : u
-      );
-      setUsers(updatedUsers);
-      localStorage.setItem('pos_users', JSON.stringify(updatedUsers));
-      
-      // สร้าง session
-      const session = {
-        userId: user.id,
-        loginTime: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 ชั่วโมง
-      };
-      localStorage.setItem('pos_session', JSON.stringify(session));
-      
-      console.log('Session created:', session);
       toast({ title: "เข้าสู่ระบบสำเร็จ", description: `ยินดีต้อนรับ ${user.name}` });
       return true;
-    } else {
-      console.log('User not found or invalid credentials');
+    } catch (error) {
+      console.error('Login error:', error);
+      const errorMessage = error.response?.data?.error || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
       toast({ 
         title: "เข้าสู่ระบบไม่สำเร็จ", 
-        description: "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", 
+        description: errorMessage, 
         variant: "destructive" 
       });
       return false;
     }
-  }, [users, toast]);
+  }, [toast]);
 
   // ออกจากระบบ
-  const logout = useCallback(() => {
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    localStorage.removeItem('pos_session');
-    toast({ title: "ออกจากระบบสำเร็จ", description: "ขอบคุณที่ใช้งาน" });
+  const logout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setCurrentUser(null);
+      setIsAuthenticated(false);
+      toast({ title: "ออกจากระบบสำเร็จ", description: "ขอบคุณที่ใช้งาน" });
+    }
   }, [toast]);
 
   // ตรวจสอบสิทธิ์
   const hasPermission = useCallback((permission) => {
     if (!currentUser) return false;
-    const userRole = ROLES[currentUser.role];
+    // แปลง role เป็นตัวพิมพ์ใหญ่เพื่อให้ตรงกับ ROLES
+    const roleKey = currentUser.role?.toUpperCase();
+    const userRole = ROLES[roleKey];
+    console.log('🔍 Permission check:', { 
+      userRole: currentUser.role, 
+      roleKey, 
+      userRole: userRole?.name,
+      permission,
+      hasPermission: userRole?.permissions.includes(permission) || false
+    });
     return userRole?.permissions.includes(permission) || false;
   }, [currentUser]);
 
@@ -292,6 +246,7 @@ export const useAuth = () => {
     currentUser,
     users,
     isAuthenticated,
+    loading,
     login,
     logout,
     hasPermission,
