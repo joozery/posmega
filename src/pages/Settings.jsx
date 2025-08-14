@@ -37,7 +37,7 @@ const Settings = () => {
     const loadSettings = async () => {
       try {
         setLoading(true);
-        const response = await settingsService.getSettings();
+        const response = await settingsService.getAllSettings();
         
         // Merge API data with defaults
         const apiSettings = response.settings || {};
@@ -115,7 +115,7 @@ const Settings = () => {
       try {
         setUploadingLogo(true);
         const result = await settingsService.uploadLogo(file);
-        handleSystemChange('logo', result.logoUrl);
+        handleSystemChange('logo', result.logo_url);
         toast({ title: "อัปโหลดโลโก้สำเร็จ", description: "โลโก้ของคุณถูกบันทึกแล้ว" });
       } catch (error) {
         console.error('Error uploading logo:', error);
@@ -132,7 +132,7 @@ const Settings = () => {
 
   const handleRemoveLogo = async () => {
     try {
-      await settingsService.removeLogo();
+      await settingsService.deleteLogo();
       handleSystemChange('logo', '');
       toast({ title: "ลบโลโก้สำเร็จ", description: "โลโก้ถูกลบออกแล้ว" });
     } catch (error) {

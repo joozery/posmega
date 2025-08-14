@@ -56,7 +56,7 @@ const Layout = ({ children }) => {
     const loadStoreSettings = async () => {
       try {
         setLoadingSettings(true);
-        const response = await settingsService.getSettings();
+        const response = await settingsService.getAllSettings();
         const apiSettings = response.settings || {};
         
         // Map logo_url to logo for frontend compatibility
@@ -64,7 +64,12 @@ const Layout = ({ children }) => {
           apiSettings.system.logo = apiSettings.system.logo_url;
         }
         
-        setStoreSettings(apiSettings.system || { storeName: 'Universal POS', logo: '' });
+        console.log('Layout - API Settings:', apiSettings);
+        console.log('Layout - System Settings:', apiSettings.system);
+        console.log('Layout - Store Name:', apiSettings.system?.storeName);
+        console.log('Layout - Logo URL:', apiSettings.system?.logo_url);
+        
+        setStoreSettings(apiSettings.system || { storeName: 'Universal POS', logo: '', logo_url: '' });
       } catch (error) {
         console.error('Error loading store settings:', error);
         // Fallback to default settings
@@ -132,9 +137,9 @@ const Layout = ({ children }) => {
                 </div>
               ) : (
                 <>
-                  {storeSettings?.logo ? (
+                  {(storeSettings?.logo || storeSettings?.logo_url) ? (
                     <img 
-                      src={storeSettings.logo} 
+                      src={storeSettings.logo || storeSettings.logo_url} 
                       alt="Store Logo" 
                       className="w-10 h-10 object-contain rounded-lg shrink-0 border border-gray-200"
                       onError={(e) => {

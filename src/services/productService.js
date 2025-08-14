@@ -26,7 +26,31 @@ export const productService = {
   // Create new product
   async createProduct(productData) {
     try {
-      const response = await api.post('/products', productData);
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Add all text fields
+      Object.keys(productData).forEach(key => {
+        if (key === 'newImage' && productData[key] instanceof File) {
+          formData.append('image', productData[key]);
+        } else if (key === 'sizes' || key === 'colors') {
+          // Convert arrays to JSON strings for form-data
+          if (Array.isArray(productData[key])) {
+            formData.append(key, JSON.stringify(productData[key]));
+          }
+        } else if (key === 'sku') {
+          // Map SKU to barcode field
+          formData.append('barcode', productData[key]);
+        } else if (productData[key] !== null && productData[key] !== undefined && key !== 'newImage') {
+          formData.append(key, productData[key]);
+        }
+      });
+
+      const response = await api.post('/products', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error) {
       console.error('Error creating product:', error);
@@ -37,7 +61,31 @@ export const productService = {
   // Update product
   async updateProduct(id, productData) {
     try {
-      const response = await api.put(`/products/${id}`, productData);
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Add all text fields
+      Object.keys(productData).forEach(key => {
+        if (key === 'newImage' && productData[key] instanceof File) {
+          formData.append('image', productData[key]);
+        } else if (key === 'sizes' || key === 'colors') {
+          // Convert arrays to JSON strings for form-data
+          if (Array.isArray(productData[key])) {
+            formData.append(key, JSON.stringify(productData[key]));
+          }
+        } else if (key === 'sku') {
+          // Map SKU to barcode field
+          formData.append('barcode', productData[key]);
+        } else if (productData[key] !== null && productData[key] !== undefined && key !== 'newImage') {
+          formData.append(key, productData[key]);
+        }
+      });
+
+      const response = await api.put(`/products/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
       return response.data;
     } catch (error) {
       console.error('Error updating product:', error);

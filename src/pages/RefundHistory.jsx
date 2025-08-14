@@ -18,6 +18,9 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import Papa from 'papaparse';
+import { salesService } from '@/services/salesService';
+import ReceiptDialog from '@/components/ReceiptDialog';
+import TaxInvoiceDialog from '@/components/TaxInvoiceDialog';
 
 const RefundHistory = () => {
   const { toast } = useToast();
@@ -31,15 +34,39 @@ const RefundHistory = () => {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isTaxInvoiceDialogOpen, setIsTaxInvoiceDialogOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    const savedSales = localStorage.getItem('pos_sales');
-    if (savedSales) {
-      const parsedSales = JSON.parse(savedSales);
-      setSales(parsedSales);
-      setFilteredSales(parsedSales);
-    }
-  }, []);
+            const loadSales = async () => {
+        try {
+          setLoading(true);
+          const response = await salesService.getAllSales();
+          console.log('Sales API Response:', response);
+          if (response.sales) {
+            console.log('Sales Data:', response.sales);
+            console.log('First Sale:', response.sales[0]);
+            console.log('First Sale Items:', response.sales[0]?.items);
+            console.log('First Sale Total Type:', typeof response.sales[0]?.total);
+            console.log('First Sale Total Value:', response.sales[0]?.total);
+            console.log('First Sale Discount Type:', typeof response.sales[0]?.discount);
+            console.log('First Sale Discount Value:', response.sales[0]?.discount);
+            setSales(response.sales);
+            setFilteredSales(response.sales);
+          }
+        } catch (error) {
+          console.error('Error loading sales:', error);
+          toast({
+            title: "เกิดข้อผิดพลาด",
+            description: "ไม่สามารถโหลดประวัติการขายได้",
+            variant: "destructive"
+          });
+        } finally {
+          setLoading(false);
+        }
+      };
+
+    loadSales();
+  }, [toast]);
 
   useEffect(() => {
     let filtered = sales;
@@ -115,57 +142,35 @@ const RefundHistory = () => {
     setIsRefundDialogOpen(true);
   };
 
-  const processRefund = (refundReason) => {
+  const processRefund = async (refundReason) => {
     if (!selectedSale) return;
 
-    // สร้างข้อมูลการคืนเงิน
-    const refund = {
-      id: `REFUND-${Date.now()}`,
-      originalSaleId: selectedSale.id,
-      amount: selectedSale.total,
-      reason: refundReason,
-      timestamp: new Date().toISOString(),
-      customer: selectedSale.customer,
-      items: selectedSale.items
-    };
-
-    // บันทึกการคืนเงิน
-    const existingRefunds = JSON.parse(localStorage.getItem('pos_refunds') || '[]');
-    localStorage.setItem('pos_refunds', JSON.stringify([refund, ...existingRefunds]));
-
-    // อัพเดทสต็อกสินค้า (เพิ่มกลับเข้าไป)
-    const currentProducts = JSON.parse(localStorage.getItem('pos_products') || '[]');
-    const updatedProducts = currentProducts.map(product => {
-      const refundedItem = selectedSale.items.find(item => item.id === product.id);
-      if (refundedItem) {
-        return { ...product, stock: product.stock + refundedItem.quantity };
-      }
-      return product;
-    });
-    localStorage.setItem('pos_products', JSON.stringify(updatedProducts));
-
-    // อัพเดทลูกค้า (ลบแต้มที่ได้จากการซื้อ)
-    if (selectedSale.customerId) {
-      const currentCustomers = JSON.parse(localStorage.getItem('pos_customers') || '[]');
-      const updatedCustomers = currentCustomers.map(customer => {
-        if (customer.id === selectedSale.customerId) {
-          return {
-            ...customer,
-            totalPurchases: Math.max(0, customer.totalPurchases - selectedSale.total),
-            loyaltyPoints: Math.max(0, (customer.loyaltyPoints || 0) - (selectedSale.pointsEarned || 0))
-          };
-        }
-        return customer;
+    try {
+      // เรียกใช้ API คืนเงิน
+      await salesService.processRefund(selectedSale.id, {
+        reason: refundReason,
+        refundAmount: selectedSale.total,
+        refundMethod: 'cash'
       });
-      localStorage.setItem('pos_customers', JSON.stringify(updatedCustomers));
-    }
 
-    toast({ title: "คืนเงินสำเร็จ", description: `คืนเงิน ${selectedSale.total.toLocaleString()} บาท เรียบร้อยแล้ว` });
-    setIsRefundDialogOpen(false);
-    setSelectedSale(null);
-    
-    // รีเฟรชข้อมูล
-    window.dispatchEvent(new Event('storage'));
+      toast({ title: "คืนเงินสำเร็จ", description: `คืนเงิน ${selectedSale.total.toLocaleString()} บาท เรียบร้อยแล้ว` });
+      setIsRefundDialogOpen(false);
+      setSelectedSale(null);
+      
+      // รีเฟรชข้อมูลการขาย
+      const response = await salesService.getAllSales();
+      if (response.sales) {
+        setSales(response.sales);
+        setFilteredSales(response.sales);
+      }
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      toast({
+        title: "เกิดข้อผิดพลาด",
+        description: "ไม่สามารถคืนเงินได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive"
+      });
+    }
   };
 
   const printReceipt = (sale) => {
@@ -214,7 +219,7 @@ const RefundHistory = () => {
     toast({ title: "ส่งออกรายงานสำเร็จ", description: "ไฟล์ CSV กำลังถูกดาวน์โหลด" });
   };
 
-  const getTotalSales = () => filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+  const getTotalSales = () => filteredSales.reduce((sum, sale) => sum + parseFloat(sale.total || 0), 0);
   const getTotalItems = () => filteredSales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
 
   return (
@@ -297,7 +302,7 @@ const RefundHistory = () => {
             <div className="ml-4">
               <p className="text-sm font-medium text-gray-600">ลูกค้าไม่ซ้ำ</p>
               <p className="text-2xl font-bold text-gray-900">
-                {new Set(filteredSales.map(s => s.customer)).size}
+                {new Set(filteredSales.map(s => s.customer_name || s.customer).filter(Boolean)).size}
               </p>
             </div>
           </div>
@@ -376,7 +381,7 @@ const RefundHistory = () => {
               แสดง {filteredSales.length} รายการ จากทั้งหมด {sales.length} รายการ
             </span>
             <span className="text-sm font-medium text-blue-600">
-              ยอดรวม: ฿{filteredSales.reduce((sum, sale) => sum + sale.total, 0).toLocaleString()}
+              ยอดรวม: ฿{filteredSales.reduce((sum, sale) => sum + parseFloat(sale.total || 0), 0).toLocaleString()}
             </span>
           </div>
         </div>
@@ -418,27 +423,30 @@ const RefundHistory = () => {
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-gray-900">{sale.id}</div>
-                    <div className="text-sm text-gray-500">{sale.paymentMethod}</div>
+                    <div className="text-sm text-gray-500">{sale.payment_method || sale.paymentMethod}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{sale.customer}</div>
+                    <div className="text-sm font-medium text-gray-900">{sale.customer_name || sale.customer || 'ลูกค้าทั่วไป'}</div>
                     {sale.pointsUsed > 0 && (
                       <div className="text-xs text-blue-600">ใช้แต้ม: {sale.pointsUsed}</div>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')}
+                      {sale.items && sale.items.length > 0 ? 
+                        sale.items.map(item => `${item.product_name || item.name || 'สินค้าไม่ระบุ'} (x${item.quantity})`).join(', ') :
+                        'ไม่มีรายการสินค้า'
+                      }
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-bold text-gray-900">฿{sale.total.toLocaleString()}</div>
+                    <div className="text-sm font-bold text-gray-900">฿{parseFloat(sale.total || 0).toLocaleString()}</div>
                     {sale.discount > 0 && (
-                      <div className="text-xs text-green-600">ส่วนลด: ฿{sale.discount.toLocaleString()}</div>
+                      <div className="text-xs text-green-600">ส่วนลด: ฿{parseFloat(sale.discount || 0).toLocaleString()}</div>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(sale.timestamp).toLocaleString('th-TH')}
+                    {sale.created_at ? new Date(sale.created_at).toLocaleString('th-TH') : 'ไม่ระบุวันที่'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
@@ -484,8 +492,8 @@ const RefundHistory = () => {
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600">รหัสการขาย: {selectedSale.id}</p>
-                <p className="text-sm text-gray-600">ลูกค้า: {selectedSale.customer}</p>
-                <p className="text-lg font-bold">ยอดคืน: ฿{selectedSale.total.toLocaleString()}</p>
+                <p className="text-sm text-gray-600">ลูกค้า: {selectedSale.customer_name || selectedSale.customer || 'ลูกค้าทั่วไป'}</p>
+                <p className="text-lg font-bold">ยอดคืน: ฿{parseFloat(selectedSale.total || 0).toLocaleString()}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">เหตุผลการคืนเงิน</label>
@@ -516,153 +524,18 @@ const RefundHistory = () => {
       )}
 
       {/* Receipt Dialog */}
-      {isReceiptDialogOpen && selectedSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setIsReceiptDialogOpen(false)} />
-          <div className="relative bg-white rounded-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">ใบเสร็จ</h2>
-            <div className="space-y-4">
-              <div className="text-center border-b pb-4">
-                <h3 className="text-lg font-bold">ร้านค้า</h3>
-                <p className="text-sm text-gray-600">ใบเสร็จรับเงิน</p>
-                <p className="text-sm text-gray-600">{selectedSale.id}</p>
-                <p className="text-sm text-gray-600">{new Date(selectedSale.timestamp).toLocaleString('th-TH')}</p>
-              </div>
-              
-              <div>
-                <p className="font-medium">ลูกค้า: {selectedSale.customer}</p>
-                <div className="mt-2 space-y-1">
-                  {selectedSale.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>{item.name} x{item.quantity}</span>
-                      <span>฿{(item.price * item.quantity).toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span>ยอดรวม:</span>
-                  <span>฿{selectedSale.subtotal.toLocaleString()}</span>
-                </div>
-                {selectedSale.discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>ส่วนลด:</span>
-                    <span>-฿{selectedSale.discount.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>ภาษี:</span>
-                  <span>฿{selectedSale.tax.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>รวมทั้งสิ้น:</span>
-                  <span>฿{selectedSale.total.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="text-center text-sm text-gray-600">
-                <p>ชำระโดย: {selectedSale.paymentMethod}</p>
-                <p>ขอบคุณที่ใช้บริการ</p>
-              </div>
-            </div>
-            <div className="flex space-x-3 mt-6">
-              <Button variant="outline" onClick={() => setIsReceiptDialogOpen(false)} className="flex-1">
-                ปิด
-              </Button>
-              <Button onClick={() => window.print()} className="flex-1">
-                พิมพ์
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReceiptDialog 
+        isOpen={isReceiptDialogOpen} 
+        onClose={() => setIsReceiptDialogOpen(false)} 
+        sale={selectedSale} 
+      />
 
       {/* Tax Invoice Dialog */}
-      {isTaxInvoiceDialogOpen && selectedSale && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setIsTaxInvoiceDialogOpen(false)} />
-          <div className="relative bg-white rounded-xl p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-semibold mb-4">ใบกำกับภาษี</h2>
-            <div className="space-y-4">
-              <div className="text-center border-b pb-4">
-                {settings?.system?.logo && (
-                  <div className="mb-3">
-                    <img 
-                      src={settings.system.logo} 
-                      alt="Store Logo" 
-                      className="w-20 h-20 object-contain mx-auto"
-                    />
-                  </div>
-                )}
-                <h3 className="text-lg font-bold">{settings?.system?.storeName || 'ร้านค้า'}</h3>
-                {settings?.system?.address && (
-                  <p className="text-sm text-gray-600 mt-1">{settings.system.address}</p>
-                )}
-                {(settings?.system?.phone || settings?.system?.email) && (
-                  <div className="text-sm text-gray-600 mt-1">
-                    {settings?.system?.phone && <p>โทร: {settings.system.phone}</p>}
-                    {settings?.system?.email && <p>อีเมล: {settings.system.email}</p>}
-                  </div>
-                )}
-                {settings?.system?.taxId && (
-                  <p className="text-sm text-gray-600 mt-1">เลขประจำตัวผู้เสียภาษี: {settings.system.taxId}</p>
-                )}
-                <p className="text-sm text-gray-600 mt-2 font-medium">ใบกำกับภาษีอย่างย่อ</p>
-                <p className="text-sm text-gray-600">เลขที่: {selectedSale.id}</p>
-                <p className="text-sm text-gray-600">วันที่: {new Date(selectedSale.timestamp).toLocaleString('th-TH')}</p>
-              </div>
-              
-              <div>
-                <p className="font-medium">ลูกค้า: {selectedSale.customer}</p>
-                <div className="mt-2 space-y-1">
-                  {selectedSale.items.map((item, index) => (
-                    <div key={index} className="flex justify-between text-sm">
-                      <span>{item.name} x{item.quantity}</span>
-                      <span>฿{(item.price * item.quantity).toLocaleString()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t pt-4 space-y-2">
-                <div className="flex justify-between">
-                  <span>ราคารวม:</span>
-                  <span>฿{selectedSale.subtotal.toLocaleString()}</span>
-                </div>
-                {selectedSale.discount > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>ส่วนลด:</span>
-                    <span>-฿{selectedSale.discount.toLocaleString()}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>ภาษีมูลค่าเพิ่ม 7%:</span>
-                  <span>฿{selectedSale.tax.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>รวมทั้งสิ้น:</span>
-                  <span>฿{selectedSale.total.toLocaleString()}</span>
-                </div>
-              </div>
-
-              <div className="text-center text-sm text-gray-600">
-                <p>หมายเหตุ: ใบกำกับภาษีนี้เป็นใบกำกับภาษีอย่างย่อ</p>
-                <p>ชำระโดย: {selectedSale.paymentMethod}</p>
-              </div>
-            </div>
-            <div className="flex space-x-3 mt-6">
-              <Button variant="outline" onClick={() => setIsTaxInvoiceDialogOpen(false)} className="flex-1">
-                ปิด
-              </Button>
-              <Button onClick={() => window.print()} className="flex-1">
-                พิมพ์
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TaxInvoiceDialog 
+        isOpen={isTaxInvoiceDialogOpen} 
+        onClose={() => setIsTaxInvoiceDialogOpen(false)} 
+        sale={selectedSale} 
+      />
     </div>
   );
 };

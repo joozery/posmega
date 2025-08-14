@@ -10,8 +10,8 @@ const BarcodeSheet = React.forwardRef(({ labels, columns = 4 }, ref) => {
     const labelChunks = chunk(labels, columns);
 
     return (
-        <div ref={ref} className="bg-white p-1 print:p-0">
-            <div className="space-y-2">
+        <div ref={ref} className="bg-white p-1 print:p-0 barcode-print-container">
+            <div className="space-y-1 print:space-y-0">
                 {labelChunks.map((chunk, index) => (
                     <MultiProductBarcodeLabel key={index} products={chunk} />
                 ))}

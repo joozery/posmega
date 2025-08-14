@@ -10,6 +10,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     name: '', sku: '', category: '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: '',
     sizes: [], colors: []
   });
+  const [newImage, setNewImage] = useState(null); // รูปภาพใหม่ที่เลือก
   const [newCategory, setNewCategory] = useState('');
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [newSize, setNewSize] = useState('');
@@ -42,19 +43,20 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     setNewCategory('');
     setNewSize('');
     setNewColor('');
+    setNewImage(null); // Reset รูปภาพใหม่
   }, [product, categories, isOpen]);
 
   useEffect(() => {
     if (barcodeRef.current && formData.sku) {
       try {
-        JsBarcode(barcodeRef.current, formData.barcode, {
+        JsBarcode(barcodeRef.current, formData.sku, {
           format: "CODE128", displayValue: true, fontSize: 16, width: 2, height: 80, margin: 10
         });
       } catch (e) {
         console.error("Barcode generation error:", e);
       }
     }
-  }, [formData.barcode, isOpen]);
+  }, [formData.sku, isOpen]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -62,6 +64,11 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     // Validation
     if (!formData.name.trim()) {
       showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อสินค้า');
+      return;
+    }
+    
+    if (!formData.sku.trim()) {
+      showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอก SKU');
       return;
     }
     
@@ -76,6 +83,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
       originalPrice: parseFloat(formData.originalPrice) || null,
       cost: parseFloat(formData.cost) || 0,
       stock: parseInt(formData.stock) || 0,
+      newImage: newImage, // ส่งรูปภาพใหม่แยก
     });
   };
 
@@ -86,11 +94,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        handleChange('image', reader.result);
-      };
-      reader.readAsDataURL(file);
+      setNewImage(file); // เก็บรูปภาพใหม่แยก
     }
   };
 
@@ -145,10 +149,14 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
                 <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-2">รูปภาพสินค้า</label>
                   <div className="mt-1 flex justify-center items-center w-full h-48 rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 text-center cursor-pointer relative" onClick={() => fileInputRef.current.click()}>
-                    {formData.image ? (
+                    {newImage || formData.image ? (
                       <>
-                        <img src={formData.image} alt="Preview" className="w-full h-full object-cover rounded-lg"/>
-                        <Button type="button" size="icon" variant="destructive" className="absolute top-2 right-2 w-8 h-8" onClick={(e) => {e.stopPropagation(); handleChange('image', null);}}>
+                        {newImage ? (
+                          <img src={URL.createObjectURL(newImage)} alt="Preview" className="w-full h-full object-cover rounded-lg"/>
+                        ) : (
+                          <img src={formData.image} alt="Preview" className="w-full h-full object-cover rounded-lg"/>
+                        )}
+                        <Button type="button" size="icon" variant="destructive" className="absolute top-2 right-2 w-8 h-8" onClick={(e) => {e.stopPropagation(); setNewImage(null);}}>
                           <Trash className="w-4 h-4" />
                         </Button>
                       </>
@@ -283,7 +291,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
               </div>
 
               {formData.sku && (<div className="mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">บาร์โค้ด</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">บาร์โค้ด (SKU: {formData.sku})</label>
                 <div className="bg-gray-50 p-4 rounded-lg flex justify-center">
                   <svg ref={barcodeRef}></svg>
                 </div>

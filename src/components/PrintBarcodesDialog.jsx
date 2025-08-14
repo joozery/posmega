@@ -34,12 +34,35 @@ const PrintBarcodesDialog = ({ isOpen, onClose, selectedProducts, products, colu
         pageStyle: `
           @page {
             size: A4;
-            margin: 1cm;
+            margin: 0.3cm;
           }
           @media print {
             body {
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+            }
+            .print\\:space-y-0 > * + * {
+              margin-top: 0 !important;
+            }
+            .print\\:gap-0 {
+              gap: 0 !important;
+            }
+            .print\\:p-0\\.5 {
+              padding: 0.125rem !important;
+            }
+            .print\\:mt-0\\.5 {
+              margin-top: 0.125rem !important;
+            }
+            .barcode-print-container {
+              page-break-inside: avoid;
+            }
+            .barcode-row {
+              page-break-inside: avoid;
+              margin-bottom: 0 !important;
+            }
+            .barcode-item {
+              page-break-inside: avoid;
+              break-inside: avoid;
             }
           }
         `,

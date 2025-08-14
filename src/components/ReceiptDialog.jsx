@@ -4,6 +4,7 @@ import { useReactToPrint } from 'react-to-print';
 import { X, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JsBarcode from 'jsbarcode';
+import { settingsService } from '@/services/settingsService';
 
 const Receipt = React.forwardRef(({ sale, settings }, ref) => {
     const barcodeRef = useRef(null);
@@ -91,27 +92,36 @@ const Receipt = React.forwardRef(({ sale, settings }, ref) => {
         return (
             <div ref={ref} className="bg-white text-black p-4 font-sans text-xs w-[300px] mx-auto">
                 <div className="text-center">
-                    {settings?.system?.logo && (
+                    {console.log('Rendering receipt with settings:', settings)}
+                    {console.log('Store name:', settings?.system?.storeName)}
+                    {console.log('Store address:', settings?.system?.address)}
+                    {(settings?.system?.logo_url || settings?.logo_url) && (
                         <div className="mb-2">
                             <img 
-                                src={settings.system.logo} 
+                                src={settings?.system?.logo_url || settings?.logo_url} 
                                 alt="Store Logo" 
                                 className="w-16 h-16 object-contain mx-auto"
                             />
                         </div>
                     )}
-                    <h1 className="text-base font-bold">{settings?.system?.storeName || 'Wooyou'}</h1>
-                    {settings?.system?.address && (
-                        <p className="text-xs mt-1">{settings.system.address}</p>
+                    <h1 className="text-base font-bold">
+                        {settings?.system?.storeName || 'Wooyou'}
+                        {console.log('Displaying store name:', settings?.system?.storeName)}
+                    </h1>
+                    {(settings?.system?.address || settings?.address) && (
+                        <p className="text-xs mt-1">
+                            {settings?.system?.address || settings?.address}
+                            {console.log('Displaying address:', settings?.system?.address || settings?.address)}
+                        </p>
                     )}
-                    {(settings?.system?.phone || settings?.system?.email) && (
+                    {(settings?.system?.phone || settings?.system?.email || settings?.phone || settings?.email) && (
                         <div className="text-xs mt-1">
-                            {settings?.system?.phone && <p>โทร: {settings.system.phone}</p>}
-                            {settings?.system?.email && <p>อีเมล: {settings.system.email}</p>}
+                            {(settings?.system?.phone || settings?.phone) && <p>โทร: {settings?.system?.phone || settings?.phone}</p>}
+                            {(settings?.system?.email || settings?.email) && <p>อีเมล: {settings?.system?.email || settings?.email}</p>}
                         </div>
                     )}
-                    {settings?.system?.taxId && (
-                        <p className="text-xs mt-1">เลขประจำตัวผู้เสียภาษี: {settings.system.taxId}</p>
+                    {(settings?.system?.taxId || settings?.tax_id) && (
+                        <p className="text-xs mt-1">เลขประจำตัวผู้เสียภาษี: {settings?.system?.taxId || settings?.tax_id}</p>
                     )}
                     <p className="mt-2">ใบเสร็จรับเงิน/ใบกำกับภาษีอย่างย่อ</p>
                     <p>----------------------------------------</p>
@@ -160,7 +170,7 @@ const Receipt = React.forwardRef(({ sale, settings }, ref) => {
                         </div>
                     )}
                     <div className="flex justify-between">
-                        <span>ภาษี ({parseFloat(settings?.system?.taxRate || 7)}%)</span>
+                        <span>ภาษี ({parseFloat(settings?.system?.taxRate || settings?.tax_rate || 7)}%)</span>
                         <span>{safeSale.tax.toFixed(2)}</span>
                     </div>
                     <p>----------------------------------------</p>
@@ -229,21 +239,40 @@ const ReceiptDialog = ({ isOpen, onClose, sale }) => {
             } else {
                 // If no settings in localStorage, try to load from API
                 console.log('No settings in localStorage, loading from API...');
-                fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/settings')
-                    .then(response => response.json())
-                    .then(data => {
+                const loadSettingsFromAPI = async () => {
+                    try {
+                        const data = await settingsService.getAllSettings();
                         console.log('Settings from API:', data);
                         if (data.settings) {
+                            console.log('Settings from API:', data.settings);
+                            console.log('System settings:', data.settings.system);
+                            console.log('Store name:', data.settings.system?.storeName);
+                            console.log('Store address:', data.settings.system?.address);
+                            console.log('Store phone:', data.settings.system?.phone);
+                            console.log('Store email:', data.settings.system?.email);
+                            console.log('Store taxId:', data.settings.system?.taxId);
+                            console.log('Store logo_url:', data.settings.system?.logo_url);
                             setSettings(data.settings);
                             localStorage.setItem('pos_settings', JSON.stringify(data.settings));
                         }
-                    })
-                    .catch(error => {
+                    } catch (error) {
                         console.error('Error loading settings from API:', error);
-                    });
+                    }
+                };
+                
+                loadSettingsFromAPI();
             }
         }
     }, [isOpen]);
+
+    console.log('ReceiptDialog settings:', settings);
+    console.log('ReceiptDialog system:', settings?.system);
+    console.log('ReceiptDialog storeName:', settings?.system?.storeName);
+    console.log('ReceiptDialog address:', settings?.system?.address);
+    console.log('ReceiptDialog phone:', settings?.system?.phone);
+    console.log('ReceiptDialog email:', settings?.system?.email);
+    console.log('ReceiptDialog taxId:', settings?.system?.taxId);
+    console.log('ReceiptDialog logo_url:', settings?.system?.logo_url);
 
     const handlePrint = useReactToPrint({
         content: () => componentRef.current,
