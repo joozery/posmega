@@ -20,11 +20,13 @@ import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import Papa from 'papaparse';
 import { salesService } from '@/services/salesService';
 import ReceiptDialog from '@/components/ReceiptDialog';
-
+import EditSaleDialog from '@/components/EditSaleDialog';
+import { useNavigate } from 'react-router-dom';
 
 const RefundHistory = () => {
   const { toast } = useToast();
-  const { hasPermission } = useAuth();
+  const { hasPermission, user } = useAuth();
+  const navigate = useNavigate();
   const [sales, setSales] = useState([]);
   const [filteredSales, setFilteredSales] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,37 +36,37 @@ const RefundHistory = () => {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isTaxInvoiceDialogOpen, setIsTaxInvoiceDialogOpen] = useState(false);
-
+  const [isEditSaleDialogOpen, setIsEditSaleDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-            const loadSales = async () => {
-        try {
-          setLoading(true);
-          const response = await salesService.getAllSales();
-          console.log('Sales API Response:', response);
-          if (response.sales) {
-            console.log('Sales Data:', response.sales);
-            console.log('First Sale:', response.sales[0]);
-            console.log('First Sale Items:', response.sales[0]?.items);
-            console.log('First Sale Total Type:', typeof response.sales[0]?.total);
-            console.log('First Sale Total Value:', response.sales[0]?.total);
-            console.log('First Sale Discount Type:', typeof response.sales[0]?.discount);
-            console.log('First Sale Discount Value:', response.sales[0]?.discount);
-            setSales(response.sales);
-            setFilteredSales(response.sales);
-          }
-        } catch (error) {
-          console.error('Error loading sales:', error);
-          toast({
-            title: "เกิดข้อผิดพลาด",
-            description: "ไม่สามารถโหลดประวัติการขายได้",
-            variant: "destructive"
-          });
-        } finally {
-          setLoading(false);
+    const loadSales = async () => {
+      try {
+        setLoading(true);
+        const response = await salesService.getAllSales();
+        console.log('Sales API Response:', response);
+        if (response.sales) {
+          console.log('Sales Data:', response.sales);
+          console.log('First Sale:', response.sales[0]);
+          console.log('First Sale Items:', response.sales[0]?.items);
+          console.log('First Sale Total Type:', typeof response.sales[0]?.total);
+          console.log('First Sale Total Value:', response.sales[0]?.total);
+          console.log('First Sale Discount Type:', typeof response.sales[0]?.discount);
+          console.log('First Sale Discount Value:', response.sales[0]?.discount);
+          setSales(response.sales);
+          setFilteredSales(response.sales);
         }
-      };
+      } catch (error) {
+        console.error('Error loading sales:', error);
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่สามารถโหลดประวัติการขายได้",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
 
     loadSales();
   }, [toast]);
@@ -182,6 +184,49 @@ const RefundHistory = () => {
   const printTaxInvoice = (sale) => {
     setSelectedSale(sale);
     setIsTaxInvoiceDialogOpen(true);
+  };
+
+  const handleEditSale = (sale) => {
+    setSelectedSale(sale);
+    setIsEditSaleDialogOpen(true);
+  };
+
+  const handleConfirmEditSale = async (sale, reason, details) => {
+    try {
+      // 1. ทำ Refund
+      await salesService.refundSale(sale.id, {
+        reason: 'edit_sale',
+        edit_reason: reason,
+        edit_details: details,
+        edited_by: user?.id,
+        edited_at: new Date().toISOString()
+      });
+
+      toast({
+        title: "✅ แก้ไขการขายสำเร็จ",
+        description: `ยกเลิกการขาย #${sale.id} แล้ว กรุณาไปขายสินค้าใหม่`,
+        duration: 5000,
+      });
+
+      // 2. ไปหน้า POS เพื่อขายใหม่
+      navigate('/pos', { 
+        state: { 
+          editMode: true, 
+          originalSaleId: sale.id,
+          editReason: reason,
+          editDetails: details
+        } 
+      });
+
+    } catch (error) {
+      console.error('Error editing sale:', error);
+      toast({
+        title: "❌ เกิดข้อผิดพลาด",
+        description: "ไม่สามารถแก้ไขการขายได้ กรุณาลองใหม่อีกครั้ง",
+        variant: "destructive",
+      });
+      throw error;
+    }
   };
 
   const exportData = () => {
@@ -465,6 +510,15 @@ const RefundHistory = () => {
                       >
                         <FileText className="w-4 h-4" />
                       </Button>
+                      {/* เพิ่มปุ่มแก้ไขการขาย */}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleEditSale(sale)}
+                        className="text-orange-600 hover:text-orange-800"
+                      >
+                        ✏️ แก้ไข
+                      </Button>
                       {hasPermission(PERMISSIONS.POS_REFUND) && (
                         <Button
                           variant="ghost"
@@ -489,32 +543,20 @@ const RefundHistory = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black bg-opacity-50" onClick={() => setIsRefundDialogOpen(false)} />
           <div className="relative bg-white rounded-xl p-6 w-full max-w-md mx-4">
-            <h2 className="text-xl font-semibold mb-4">คืนเงิน</h2>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm text-gray-600">รหัสการขาย: {selectedSale.id}</p>
-                <p className="text-sm text-gray-600">ลูกค้า: {selectedSale.customer_name || selectedSale.customer || 'ลูกค้าทั่วไป'}</p>
-                <p className="text-lg font-bold">ยอดคืน: ฿{parseFloat(selectedSale.total || 0).toLocaleString()}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">เหตุผลการคืนเงิน</label>
-                <textarea
-                  id="refundReason"
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="ระบุเหตุผลการคืนเงิน..."
-                />
-              </div>
-            </div>
-            <div className="flex space-x-3 mt-6">
-              <Button variant="outline" onClick={() => setIsRefundDialogOpen(false)} className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">คืนเงิน</h3>
+            <p className="text-gray-600 mb-4">
+              คุณต้องการคืนเงินสำหรับการขาย #{selectedSale.id} จำนวน ฿{selectedSale.total.toLocaleString()} บาท หรือไม่?
+            </p>
+            <div className="flex space-x-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsRefundDialogOpen(false)}
+                className="flex-1"
+              >
                 ยกเลิก
               </Button>
-              <Button 
-                onClick={() => {
-                  const reason = document.getElementById('refundReason').value;
-                  processRefund(reason || 'ไม่ระบุเหตุผล');
-                }}
+              <Button
+                onClick={() => processRefund('customer_request')}
                 className="flex-1 bg-red-600 hover:bg-red-700"
               >
                 คืนเงิน
@@ -525,19 +567,27 @@ const RefundHistory = () => {
       )}
 
       {/* Receipt Dialog */}
-      <ReceiptDialog 
-        isOpen={isReceiptDialogOpen} 
-        onClose={() => setIsReceiptDialogOpen(false)} 
-        sale={selectedSale} 
+      <ReceiptDialog
+        isOpen={isReceiptDialogOpen}
+        onClose={() => setIsReceiptDialogOpen(false)}
+        sale={selectedSale}
         type="receipt"
       />
 
       {/* Tax Invoice Dialog */}
-      <ReceiptDialog 
-        isOpen={isTaxInvoiceDialogOpen} 
-        onClose={() => setIsTaxInvoiceDialogOpen(false)} 
-        sale={selectedSale} 
+      <ReceiptDialog
+        isOpen={isTaxInvoiceDialogOpen}
+        onClose={() => setIsTaxInvoiceDialogOpen(false)}
+        sale={selectedSale}
         type="tax-invoice"
+      />
+
+      {/* EditSaleDialog */}
+      <EditSaleDialog 
+        isOpen={isEditSaleDialogOpen} 
+        onClose={() => setIsEditSaleDialogOpen(false)} 
+        sale={selectedSale}
+        onConfirmEdit={handleConfirmEditSale}
       />
     </div>
   );

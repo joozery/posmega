@@ -45,6 +45,17 @@ export const salesService = {
     }
   },
 
+  // Refund sale for editing (includes edit reason and details)
+  async refundSale(saleId, refundData) {
+    try {
+      const response = await api.post(`/sales/${saleId}/refund`, refundData);
+      return response.data;
+    } catch (error) {
+      console.error('Error refunding sale for edit:', error);
+      throw error;
+    }
+  },
+
   // Get sales statistics
   async getSalesStats(params = {}) {
     try {
