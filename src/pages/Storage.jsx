@@ -303,7 +303,7 @@ const Storage = () => {
         <div className="border-b border-gray-200">
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
             {[
-              { id: 'overview', name: 'ภาพรวม', icon: Cloud },
+              { id: 'overview', name: 'ภาพรวม', icon: HardDrive },
               { id: 'resources', name: 'ไฟล์ภาพ', icon: Image },
               { id: 'cleanup', name: 'ล้างข้อมูล', icon: Trash2 }
             ].map((tab) => (
