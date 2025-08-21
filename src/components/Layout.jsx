@@ -17,7 +17,8 @@ import {
   LogOut,
   User,
   Shield,
-  History
+  History,
+  HardDrive
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -100,6 +101,7 @@ const Layout = ({ children }) => {
     { name: 'รายงาน', href: '/reports', icon: BarChart3, permission: PERMISSIONS.REPORTS_VIEW },
     { name: 'ประวัติการขาย', href: '/refund-history', icon: History, permission: PERMISSIONS.REPORTS_VIEW },
     { name: 'ผู้ใช้', href: '/users', icon: Shield, permission: PERMISSIONS.USERS_VIEW },
+    { name: 'จัดการพื้นที่', href: '/storage', icon: HardDrive, permission: PERMISSIONS.REPORTS_VIEW },
     { name: 'ตั้งค่า', href: '/settings', icon: Settings, permission: PERMISSIONS.SETTINGS_VIEW },
   ];
 

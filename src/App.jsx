@@ -15,6 +15,7 @@ import RefundHistory from '@/pages/RefundHistory';
 import Settings from '@/pages/Settings';
 import Barcodes from '@/pages/Barcodes';
 import Users from '@/pages/Users';
+import Storage from '@/pages/Storage';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
@@ -147,6 +148,12 @@ function App() {
                 <Route path="/settings" element={
                   <ProtectedRoute requiredPermissions={[PERMISSIONS.SETTINGS_VIEW]}>
                     <Settings />
+                  </ProtectedRoute>
+                } />
+                
+                <Route path="/storage" element={
+                  <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>
+                    <Storage />
                   </ProtectedRoute>
                 } />
                 
