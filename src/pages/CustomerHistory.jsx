@@ -171,50 +171,43 @@ const CustomerHistory = () => {
       );
     }
 
-    // เพิ่มข้อมูลการซื้อล่าสุดและสถิติ
+    // ใช้ข้อมูลจาก Backend โดยตรง (ไม่คำนวณซ้ำ)
     filtered = filtered.map(customer => {
       if (!customer || !customer.id) {
         console.warn('Invalid customer data:', customer);
         return null;
       }
 
-      const customerSales = sales.filter(sale => sale && sale.customerId === customer.id);
-      const totalSpent = customerSales.reduce((sum, sale) => {
-        const saleTotal = sale.total || 0;
-        return sum + saleTotal;
-      }, 0);
-      const totalOrders = customerSales.length;
+      // แปลงข้อมูลให้เป็น number และจัดการ null/undefined
+      const totalSpent = parseFloat(customer.total_spent) || 0;
+      const totalPurchases = parseInt(customer.total_purchases) || 0;
+      const loyaltyPoints = parseInt(customer.loyalty_points) || 0;
       
-      let lastPurchase = null;
-      if (customerSales.length > 0) {
-        try {
-          const timestamps = customerSales
-            .map(s => s.timestamp)
-            .filter(timestamp => timestamp)
-            .map(timestamp => new Date(timestamp));
-          
-          if (timestamps.length > 0) {
-            lastPurchase = new Date(Math.max(...timestamps));
-          }
-        } catch (error) {
-          console.warn('Error parsing timestamp:', error);
-        }
-      }
+      // คำนวณค่าเฉลี่ยต่อออเดอร์
+      const averageOrderValue = totalPurchases > 0 ? totalSpent / totalPurchases : 0;
+      
+      console.log(`Customer ${customer.id} (${customer.name}):`, {
+        total_spent: customer.total_spent,
+        total_purchases: customer.total_purchases,
+        parsed_spent: totalSpent,
+        parsed_purchases: totalPurchases,
+        averageOrderValue
+      });
       
       return {
         ...customer,
-        totalSpent: totalSpent || 0,
-        totalOrders: totalOrders || 0,
-        lastPurchase,
-        averageOrderValue: totalOrders > 0 ? totalSpent / totalOrders : 0
+        total_spent: totalSpent,
+        total_purchases: totalPurchases,
+        loyalty_points: loyaltyPoints,
+        averageOrderValue: averageOrderValue
       };
     }).filter(Boolean); // กรอง null values ออก
 
     // เรียงตามยอดซื้อล่าสุด
     try {
       filtered.sort((a, b) => {
-        const aDate = a.lastPurchase || new Date(0);
-        const bDate = b.lastPurchase || new Date(0);
+        const aDate = a.last_purchase ? new Date(a.last_purchase) : new Date(0);
+        const bDate = b.last_purchase ? new Date(b.last_purchase) : new Date(0);
         return bDate - aDate;
       });
     } catch (error) {
@@ -243,7 +236,7 @@ const CustomerHistory = () => {
       if (customerHistory && customerHistory.sales && Array.isArray(customerHistory.sales)) {
         // อัปเดตข้อมูลการขายของลูกค้านี้
         const updatedSales = sales.map(sale => {
-          if (sale && sale.customerId === customer.id) {
+          if (sale && sale.customer_id === customer.id) {
             const historySale = customerHistory.sales.find(s => s && s.id === sale.id);
             return historySale ? { ...sale, ...historySale } : sale;
           }
@@ -253,7 +246,7 @@ const CustomerHistory = () => {
       } else if (customerHistory && customerHistory.data && customerHistory.data.sales && Array.isArray(customerHistory.data.sales)) {
         // กรณีที่ API ส่งข้อมูลในรูปแบบ { data: { sales: [...] } }
         const updatedSales = sales.map(sale => {
-          if (sale && sale.customerId === customer.id) {
+          if (sale && sale.customer_id === customer.id) {
             const historySale = customerHistory.data.sales.find(s => s && s.id === sale.id);
             return historySale ? { ...sale, ...historySale } : sale;
           }
@@ -296,12 +289,12 @@ const CustomerHistory = () => {
         'Name': customer?.name || 'ไม่ระบุ',
         'Phone': customer?.phone || '',
         'Email': customer?.email || '',
-        'Join Date': customer?.joinDate ? new Date(customer.joinDate).toLocaleDateString('th-TH') : 'ไม่ระบุ',
-        'Total Purchases': (customer?.totalSpent || 0).toFixed(2),
-        'Total Orders': customer?.totalOrders || 0,
+        'Join Date': customer?.created_at ? new Date(customer.created_at).toLocaleDateString('th-TH') : 'ไม่ระบุ',
+        'Total Purchases': (customer?.total_spent || 0).toFixed(2),
+        'Total Orders': customer?.total_purchases || 0,
         'Average Order Value': (customer?.averageOrderValue || 0).toFixed(2),
-        'Loyalty Points': customer?.loyaltyPoints || 0,
-        'Last Purchase': customer?.lastPurchase ? new Date(customer.lastPurchase).toLocaleDateString('th-TH') : 'ไม่เคยซื้อ'
+        'Loyalty Points': customer?.loyalty_points || 0,
+        'Last Purchase': customer?.last_purchase ? new Date(customer.last_purchase).toLocaleDateString('th-TH') : 'ไม่เคยซื้อ'
       }));
 
       const csv = Papa.unparse(dataToExport);
@@ -329,7 +322,7 @@ const CustomerHistory = () => {
     if (!Array.isArray(sales) || !customerId) {
       return [];
     }
-    return sales.filter(sale => sale && sale.customerId === customerId);
+    return sales.filter(sale => sale && sale.customer_id === customerId);
   };
 
   // ฟังก์ชันสำหรับรีเฟรชข้อมูล
@@ -457,7 +450,7 @@ const CustomerHistory = () => {
   const getTotalRevenue = () => {
     if (!Array.isArray(filteredCustomers)) return 0;
     return filteredCustomers.reduce((sum, customer) => {
-      const totalSpent = customer?.totalSpent || 0;
+      const totalSpent = parseFloat(customer?.total_spent) || 0;
       return sum + totalSpent;
     }, 0);
   };
@@ -465,7 +458,7 @@ const CustomerHistory = () => {
   const getAverageOrderValue = () => {
     if (!Array.isArray(filteredCustomers)) return 0;
     const totalOrders = filteredCustomers.reduce((sum, customer) => {
-      const orders = customer?.totalOrders || 0;
+      const orders = parseInt(customer?.total_purchases) || 0;
       return sum + orders;
     }, 0);
     return totalOrders > 0 ? getTotalRevenue() / totalOrders : 0;
@@ -476,12 +469,12 @@ const CustomerHistory = () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
     return filteredCustomers.filter(customer => {
-      if (!customer?.lastPurchase) return false;
+      if (!customer?.last_purchase) return false;
       try {
-        const lastPurchaseDate = new Date(customer.lastPurchase);
+        const lastPurchaseDate = new Date(customer.last_purchase);
         return lastPurchaseDate > thirtyDaysAgo;
       } catch (error) {
-        console.warn('Error parsing lastPurchase date:', error);
+        console.warn('Error parsing last_purchase date:', error);
         return false;
       }
     }).length;
@@ -750,19 +743,19 @@ const CustomerHistory = () => {
                         <div className="text-sm text-gray-500">{customer.email || '-'}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900">฿{(customer.totalSpent || 0).toLocaleString()}</div>
-                        <div className="text-sm text-gray-500">{customer.totalOrders || 0} ออเดอร์</div>
+                        <div className="text-sm font-medium text-gray-900">฿{(customer.total_spent || 0).toLocaleString()}</div>
+                        <div className="text-sm text-gray-500">{customer.total_purchases || 0} ออเดอร์</div>
                         <div className="text-xs text-gray-400">เฉลี่ย ฿{(customer.averageOrderValue || 0).toLocaleString()}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           <Star className="w-4 h-4 text-yellow-500 mr-1" />
-                          <span className="text-sm font-medium text-gray-900">{customer.loyaltyPoints || 0}</span>
+                          <span className="text-sm font-medium text-gray-900">{customer.loyalty_points || 0}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.lastPurchase 
-                          ? new Date(customer.lastPurchase).toLocaleDateString('th-TH')
+                        {customer.last_purchase 
+                          ? new Date(customer.last_purchase).toLocaleDateString('th-TH')
                           : 'ไม่เคยซื้อ'
                         }
                       </td>
@@ -794,15 +787,15 @@ const CustomerHistory = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="font-medium text-blue-900">ยอดซื้อรวม</h3>
-                <p className="text-2xl font-bold text-blue-600">฿{(selectedCustomer.totalSpent || 0).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-blue-600">฿{(selectedCustomer.total_spent || 0).toLocaleString()}</p>
               </div>
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="font-medium text-green-900">จำนวนออเดอร์</h3>
-                <p className="text-2xl font-bold text-green-600">{selectedCustomer.totalOrders || 0}</p>
+                <p className="text-2xl font-bold text-green-600">{selectedCustomer.total_purchases || 0}</p>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
                 <h3 className="font-medium text-purple-900">แต้มสะสม</h3>
-                <p className="text-2xl font-bold text-purple-600">{selectedCustomer.loyaltyPoints || 0}</p>
+                <p className="text-2xl font-bold text-purple-600">{selectedCustomer.loyalty_points || 0}</p>
               </div>
             </div>
             
@@ -812,13 +805,13 @@ const CustomerHistory = () => {
                 <h3 className="font-medium text-gray-900">ข้อมูลลูกค้า</h3>
                 <p className="text-sm text-gray-600">เบอร์โทร: {selectedCustomer.phone || 'ไม่ระบุ'}</p>
                 <p className="text-sm text-gray-600">อีเมล: {selectedCustomer.email || 'ไม่ระบุ'}</p>
-                <p className="text-sm text-gray-600">วันที่สมัคร: {selectedCustomer.joinDate ? new Date(selectedCustomer.joinDate).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</p>
+                <p className="text-sm text-gray-600">วันที่สมัคร: {selectedCustomer.created_at ? new Date(selectedCustomer.created_at).toLocaleDateString('th-TH') : 'ไม่ระบุ'}</p>
               </div>
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-medium text-gray-900">สถิติเพิ่มเติม</h3>
                 <p className="text-sm text-gray-600">ออเดอร์เฉลี่ย: ฿{(selectedCustomer.averageOrderValue || 0).toLocaleString()}</p>
-                <p className="text-sm text-gray-600">ลูกค้าแอคทีฟ: {selectedCustomer.lastPurchase ? 'ใช่' : 'ไม่'}</p>
-                <p className="text-sm text-gray-600">ซื้อล่าสุด: {selectedCustomer.lastPurchase ? new Date(selectedCustomer.lastPurchase).toLocaleDateString('th-TH') : 'ไม่เคยซื้อ'}</p>
+                <p className="text-sm text-gray-600">ลูกค้าแอคทีฟ: {selectedCustomer.last_purchase ? 'ใช่' : 'ไม่'}</p>
+                <p className="text-sm text-gray-600">ซื้อล่าสุด: {selectedCustomer.last_purchase ? new Date(selectedCustomer.last_purchase).toLocaleDateString('th-TH') : 'ไม่เคยซื้อ'}</p>
               </div>
             </div>
 
@@ -835,24 +828,24 @@ const CustomerHistory = () => {
                           <div>
                             <p className="font-medium text-gray-900">ออเดอร์ #{sale.id}</p>
                             <p className="text-sm text-gray-500">
-                              {sale.timestamp ? new Date(sale.timestamp).toLocaleString('th-TH') : 'ไม่ระบุเวลา'}
+                              {sale.created_at ? new Date(sale.created_at).toLocaleString('th-TH') : 'ไม่ระบุเวลา'}
                             </p>
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-gray-900">฿{(sale.total || 0).toLocaleString()}</p>
-                            <p className="text-sm text-gray-500">{sale.paymentMethod || 'ไม่ระบุ'}</p>
+                            <p className="text-sm text-gray-500">{sale.payment_method || 'ไม่ระบุ'}</p>
                           </div>
                         </div>
                         <div className="text-sm text-gray-600">
                           <p>สินค้า: {sale.items && Array.isArray(sale.items) && sale.items.length > 0 ? 
-                            sale.items.map(item => `${item.name || item.productName || 'ไม่ระบุ'} (x${item.quantity || 0})`).join(', ') : 
+                            sale.items.map(item => `${item.product_name || item.name || 'ไม่ระบุ'} (x${item.quantity || 0})`).join(', ') : 
                             'ไม่ระบุรายการสินค้า'
                           }</p>
-                          {sale.pointsUsed > 0 && (
-                            <p className="text-blue-600">ใช้แต้ม: {sale.pointsUsed}</p>
+                          {sale.points_used > 0 && (
+                            <p className="text-blue-600">ใช้แต้ม: {sale.points_used}</p>
                           )}
-                          {sale.pointsEarned > 0 && (
-                            <p className="text-green-600">ได้แต้ม: {sale.pointsEarned}</p>
+                          {sale.points_earned > 0 && (
+                            <p className="text-green-600">ได้แต้ม: {sale.points_earned}</p>
                           )}
                         </div>
                       </div>
@@ -872,12 +865,12 @@ const CustomerHistory = () => {
               <h3 className="font-medium text-blue-900 mb-2">สรุปข้อมูล</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-blue-700">ลูกค้าคนนี้ได้ซื้อสินค้าจากร้านเราเป็นจำนวน <span className="font-bold">{selectedCustomer.totalOrders || 0}</span> ครั้ง</p>
-                  <p className="text-blue-700">มียอดซื้อรวม <span className="font-bold">฿{(selectedCustomer.totalSpent || 0).toLocaleString()}</span></p>
+                  <p className="text-blue-700">ลูกค้าคนนี้ได้ซื้อสินค้าจากร้านเราเป็นจำนวน <span className="font-bold">{selectedCustomer.total_purchases || 0}</span> ครั้ง</p>
+                  <p className="text-blue-700">มียอดซื้อรวม <span className="font-bold">฿{(selectedCustomer.total_spent || 0).toLocaleString()}</span></p>
                 </div>
                 <div>
                   <p className="text-blue-700">ออเดอร์เฉลี่ย <span className="font-bold">฿{(selectedCustomer.averageOrderValue || 0).toLocaleString()}</span></p>
-                  <p className="text-blue-700">มีแต้มสะสม <span className="font-bold">{selectedCustomer.loyaltyPoints || 0}</span> แต้ม</p>
+                  <p className="text-blue-700">มีแต้มสะสม <span className="font-bold">{selectedCustomer.loyalty_points || 0}</span> แต้ม</p>
                 </div>
               </div>
             </div>

@@ -79,7 +79,10 @@ function App() {
                 <title>เข้าสู่ระบบ - Universal POS</title>
                 <meta name="description" content="เข้าสู่ระบบระบบ Point of Sale" />
               </Helmet>
-              <LoginDialog />
+              <Routes>
+                <Route path="/login" element={<LoginDialog />} />
+                <Route path="*" element={<Navigate to="/login" replace />} />
+              </Routes>
             </>
           ) : (
             <Layout>
@@ -146,6 +149,9 @@ function App() {
                     <Settings />
                   </ProtectedRoute>
                 } />
+                
+                {/* Catch-all route for unknown paths */}
+                <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Layout>
           )}

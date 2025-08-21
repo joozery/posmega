@@ -196,10 +196,12 @@ const RefundHistory = () => {
       // 1. ทำ Refund
       await salesService.refundSale(sale.id, {
         reason: 'edit_sale',
+        refundAmount: sale.total, // เพิ่ม refundAmount ที่ API ต้องการ
+        refundMethod: 'cash',
         edit_reason: reason,
         edit_details: details,
         edited_by: user?.id,
-        edited_at: new Date().toISOString()
+        edited_at: new Date().toISOString().slice(0, 19).replace('T', ' ') // แปลงเป็น MySQL datetime format
       });
 
       toast({

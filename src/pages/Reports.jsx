@@ -8,23 +8,99 @@ import {
   ShoppingCart,
   Package,
   BarChart3,
-  CreditCard
+  CreditCard,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import Papa from 'papaparse';
+import { salesService } from '@/services/salesService';
+import { showError, showLoading, closeLoading } from '@/utils/sweetalert';
 
 const Reports = () => {
   const { toast } = useToast();
   const [dateRange, setDateRange] = useState('today');
   const [salesData, setSalesData] = useState([]);
+  const [statsData, setStatsData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const savedSales = localStorage.getItem('pos_sales');
-    if (savedSales) {
-      setSalesData(JSON.parse(savedSales));
+    loadSalesStats();
+  }, [dateRange]);
+
+  const loadSalesStats = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      showLoading('กำลังโหลดข้อมูลรายงาน...');
+      
+      // คำนวณช่วงวันที่ตาม dateRange
+      const { startDate, endDate } = getDateRange();
+      
+      // เรียก API สำหรับสถิติ
+      const response = await salesService.getSalesStats({ startDate, endDate });
+      console.log('📊 Sales Stats API Response:', response);
+      
+      setStatsData(response);
+      
+      // เรียก API สำหรับข้อมูลการขายทั้งหมด (สำหรับ export)
+      const salesResponse = await salesService.getAllSales({ 
+        startDate, 
+        endDate,
+        limit: 1000 // รับข้อมูลมากๆ สำหรับรายงาน
+      });
+      
+      if (salesResponse.sales) {
+        setSalesData(salesResponse.sales);
+      }
+      
+      closeLoading();
+    } catch (error) {
+      console.error('Error loading sales stats:', error);
+      setError('ไม่สามารถโหลดข้อมูลรายงานได้');
+      closeLoading();
+      showError('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลรายงานได้');
+    } finally {
+      setLoading(false);
     }
-  }, []);
+  };
+
+  const getDateRange = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (dateRange) {
+      case 'today':
+        return {
+          startDate: today.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'week':
+        const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+        return {
+          startDate: weekAgo.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'month':
+        const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+        return {
+          startDate: monthAgo.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      case 'year':
+        const yearAgo = new Date(today.getTime() - 365 * 24 * 60 * 60 * 1000);
+        return {
+          startDate: yearAgo.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+      default:
+        return {
+          startDate: today.toISOString().split('T')[0],
+          endDate: today.toISOString().split('T')[0]
+        };
+    }
+  };
 
   const getFilteredData = () => {
     const now = new Date();
@@ -53,67 +129,62 @@ const Reports = () => {
 
   const filteredSales = getFilteredData();
 
-  const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-  const totalOrders = filteredSales.length;
-  const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
-  const totalItems = filteredSales.reduce((sum, sale) => 
-    sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+  // ใช้ข้อมูลจาก API stats
+  const totalSales = statsData?.summary?.totalSales || 0;
+  const totalOrders = statsData?.summary?.totalOrders || 0;
+  const avgOrderValue = statsData?.summary?.averageOrderValue || 0;
+  
+  // คำนวณ totalItems จาก salesData
+  const totalItems = salesData.reduce((sum, sale) => 
+    sum + (sale.items?.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0) || 0), 0
   );
 
-  const productSales = {};
-  filteredSales.forEach(sale => {
-    sale.items.forEach(item => {
-      if (productSales[item.name]) {
-        productSales[item.name].quantity += item.quantity;
-        productSales[item.name].revenue += item.price * item.quantity;
-      } else {
-        productSales[item.name] = {
-          name: item.name,
-          quantity: item.quantity,
-          revenue: item.price * item.quantity
-        };
-      }
-    });
-  });
-
-  const topProducts = Object.values(productSales)
-    .sort((a, b) => b.quantity - a.quantity)
-    .slice(0, 5);
-
+  // ใช้ข้อมูลจาก API stats
+  const topProducts = statsData?.topProducts || [];
+  
+  // แปลงข้อมูล payment methods จาก API
   const paymentMethods = {};
-  filteredSales.forEach(sale => {
-    const method = sale.paymentMethod || 'ไม่ระบุ';
-    if (paymentMethods[method]) {
-      paymentMethods[method].count += 1;
-      paymentMethods[method].amount += sale.total;
-    } else {
-      paymentMethods[method] = {
-        method: method,
-        count: 1,
-        amount: sale.total
+  if (statsData?.paymentMethods) {
+    statsData.paymentMethods.forEach(method => {
+      paymentMethods[method.payment_method] = {
+        method: method.payment_method || 'ไม่ระบุ',
+        count: method.count || 0,
+        amount: method.total || 0
       };
-    }
-  });
+    });
+  }
 
-  const dailySales = [];
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-    
-    const daySales = salesData.filter(sale => {
-      const saleDate = new Date(sale.timestamp);
-      return saleDate >= dayStart && saleDate < dayEnd;
-    });
-    
-    const dayTotal = daySales.reduce((sum, sale) => sum + sale.total, 0);
-    
-    dailySales.push({
-      date: date.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric' }),
-      amount: dayTotal,
-      orders: daySales.length
-    });
+  // ใช้ข้อมูลจาก API stats หรือคำนวณจาก salesData
+  let dailySales = [];
+  
+  if (statsData?.dailySales && statsData.dailySales.length > 0) {
+    // ใช้ข้อมูลจาก API
+    dailySales = statsData.dailySales.map(day => ({
+      date: new Date(day.date).toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric' }),
+      amount: day.total || 0,
+      orders: day.count || 0
+    }));
+  } else {
+    // คำนวณจาก salesData (fallback)
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+      
+      const daySales = salesData.filter(sale => {
+        const saleDate = new Date(sale.created_at || sale.timestamp);
+        return saleDate >= dayStart && saleDate < dayEnd;
+      });
+      
+      const dayTotal = daySales.reduce((sum, sale) => sum + (parseFloat(sale.total) || 0), 0);
+      
+      dailySales.push({
+        date: date.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric' }),
+        amount: dayTotal,
+        orders: daySales.length
+      });
+    }
   }
 
   const handleExport = () => {
@@ -161,6 +232,35 @@ const Reports = () => {
     { value: 'year', label: '1 ปีที่ผ่านมา' }
   ];
 
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 animate-spin text-blue-600 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">กำลังโหลดข้อมูลรายงาน...</h2>
+          <p className="text-gray-500">กรุณารอสักครู่</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-red-600 text-2xl">⚠️</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-600 mb-2">เกิดข้อผิดพลาด</h2>
+          <p className="text-gray-500 mb-4">{error}</p>
+          <Button onClick={loadSalesStats}>ลองใหม่</Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -168,14 +268,20 @@ const Reports = () => {
           <h1 className="text-3xl font-bold text-gray-900">รายงานและสถิติ</h1>
           <p className="text-gray-600 mt-1">วิเคราะห์ข้อมูลการขายและประสิทธิภาพธุรกิจ</p>
         </div>
-        <Button onClick={handleExport}>
-          <Download className="w-4 h-4 mr-2" />
-          ส่งออกรายงาน
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={loadSalesStats} disabled={loading}>
+            <Loader2 className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            รีเฟรช
+          </Button>
+          <Button onClick={handleExport} disabled={!statsData}>
+            <Download className="w-4 h-4 mr-2" />
+            ส่งออกรายงาน
+          </Button>
+        </div>
       </div>
 
       <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border">
-        <div className="flex flex-col md:flex-row gap-4">
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="flex-1">
             <label className="block text-sm font-medium text-gray-700 mb-2">ช่วงเวลา</label>
             <select
@@ -190,6 +296,11 @@ const Reports = () => {
               ))}
             </select>
           </div>
+          {statsData && (
+            <div className="text-sm text-gray-600">
+              <span className="font-medium">ช่วงวันที่:</span> {getDateRange().startDate} ถึง {getDateRange().endDate}
+            </div>
+          )}
         </div>
       </div>
 
@@ -245,18 +356,18 @@ const Reports = () => {
           <div className="space-y-4">
             {topProducts.length > 0 ? (
               topProducts.map((product, index) => (
-                <div key={product.name} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
+                <div key={product.id || product.name} className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50">
                   <div className="flex items-center space-x-3">
                     <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-lg flex items-center justify-center">
                       <span className="text-white text-xs font-bold">{index + 1}</span>
                     </div>
                     <div>
                       <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-sm text-gray-500">ขายได้ {product.quantity} ชิ้น</p>
+                      <p className="text-sm text-gray-500">ขายได้ {product.total_quantity || product.quantity || 0} ชิ้น</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">฿{product.revenue.toLocaleString()}</p>
+                    <p className="font-semibold text-gray-900">฿{(product.total_revenue || product.revenue || 0).toLocaleString()}</p>
                   </div>
                 </div>
               ))

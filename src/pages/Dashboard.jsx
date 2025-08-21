@@ -16,6 +16,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
+import { salesService } from '@/services/salesService';
+import { productService } from '@/services/productService';
+import { customerService } from '@/services/customerService';
 import Papa from 'papaparse';
 import { useNavigate } from 'react-router-dom';
 
@@ -26,17 +29,91 @@ const Dashboard = () => {
   const [sales, setSales] = useState([]);
   const [products, setProducts] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [dateFilter, setDateFilter] = useState('today'); // today, week, month, year, custom
   const [customDateRange, setCustomDateRange] = useState({ start: '', end: '' });
 
+  // ดึงข้อมูลจาก API
   useEffect(() => {
-    const savedSales = localStorage.getItem('pos_sales');
-    const savedProducts = localStorage.getItem('pos_products');
-    const savedCustomers = localStorage.getItem('pos_customers');
-    if (savedSales) setSales(JSON.parse(savedSales));
-    if (savedProducts) setProducts(JSON.parse(savedProducts));
-    if (savedCustomers) setCustomers(JSON.parse(savedCustomers));
-  }, []);
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log('🔄 Dashboard: Fetching data from APIs...');
+        
+        // ดึงข้อมูลจาก API พร้อมกัน
+        const [salesResponse, productsResponse, customersResponse] = await Promise.all([
+          salesService.getAllSales(),
+          productService.getAllProducts(),
+          customerService.getAllCustomers()
+        ]);
+        
+        console.log('📊 Dashboard API responses:', {
+          sales: salesResponse?.length || 0,
+          products: productsResponse?.length || 0,
+          customers: customersResponse?.length || 0
+        });
+        
+        // จัดการข้อมูล Sales
+        let salesData = [];
+        if (Array.isArray(salesResponse)) {
+          salesData = salesResponse;
+        } else if (salesResponse?.sales && Array.isArray(salesResponse.sales)) {
+          salesData = salesResponse.sales;
+        }
+        
+        // แก้ไขข้อมูลยอดขายที่อาจมีปัญหา
+        salesData = salesData.map(sale => ({
+          ...sale,
+          total: parseFloat(sale.total) || 0,
+          subtotal: parseFloat(sale.subtotal) || 0,
+          discount: parseFloat(sale.discount) || 0,
+          tax: parseFloat(sale.tax) || 0
+        }));
+        
+        // จัดการข้อมูล Products
+        let productsData = [];
+        if (Array.isArray(productsResponse)) {
+          productsData = productsResponse;
+        } else if (productsResponse?.products && Array.isArray(productsResponse.products)) {
+          productsData = productsResponse.products;
+        }
+        
+        // จัดการข้อมูล Customers
+        let customersData = [];
+        if (Array.isArray(customersResponse)) {
+          customersData = customersResponse;
+        } else if (customersResponse?.customers && Array.isArray(customersResponse.customers)) {
+          customersData = customersResponse.customers;
+        }
+        
+        setSales(salesData);
+        setProducts(productsData);
+        setCustomers(customersData);
+        
+        console.log('✅ Dashboard: Data loaded successfully', {
+          salesCount: salesData.length,
+          productsCount: productsData.length,
+          customersCount: customersData.length
+        });
+        
+      } catch (error) {
+        console.error('❌ Dashboard: Error fetching data:', error);
+        setError('ไม่สามารถโหลดข้อมูลได้ กรุณาลองใหม่อีกครั้ง');
+        toast({
+          title: "เกิดข้อผิดพลาด",
+          description: "ไม่สามารถโหลดข้อมูลแดชบอร์ดได้",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast]);
 
   const today = new Date();
   const yesterday = new Date(today);
@@ -80,7 +157,7 @@ const Dashboard = () => {
     }
 
     return sales.filter(sale => {
-      const saleDate = new Date(sale.timestamp);
+      const saleDate = new Date(sale.created_at || sale.timestamp);
       return saleDate >= startDate && saleDate < endDate;
     });
   };
@@ -88,7 +165,7 @@ const Dashboard = () => {
   const getSalesOnDate = (date) => {
     const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     return sales.filter(sale => {
-      const saleDate = new Date(sale.timestamp);
+      const saleDate = new Date(sale.created_at || sale.timestamp);
       return saleDate >= targetDate && saleDate < new Date(targetDate.getTime() + 24 * 60 * 60 * 1000);
     });
   };
@@ -97,9 +174,36 @@ const Dashboard = () => {
   const salesToday = getSalesOnDate(today);
   const salesYesterday = getSalesOnDate(yesterday);
 
-  const totalSalesToday = salesToday.reduce((sum, sale) => sum + sale.total, 0);
-  const totalSalesYesterday = salesYesterday.reduce((sum, sale) => sum + sale.total, 0);
-  const totalFilteredSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+  // แก้ไขการคำนวณยอดขายให้ถูกต้อง
+  const totalSalesToday = salesToday.reduce((sum, sale) => {
+    const saleTotal = parseFloat(sale.total) || 0;
+    // ตรวจสอบว่าจำนวนเงินไม่เกินค่าที่สมเหตุสมผล
+    if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+      console.warn('Invalid sale total detected:', sale);
+      return sum;
+    }
+    return sum + saleTotal;
+  }, 0);
+  
+  const totalSalesYesterday = salesYesterday.reduce((sum, sale) => {
+    const saleTotal = parseFloat(sale.total) || 0;
+    // ตรวจสอบว่าจำนวนเงินไม่เกินค่าที่สมเหตุสมผล
+    if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+      console.warn('Invalid sale total detected:', sale);
+      return sum;
+    }
+    return sum + saleTotal;
+  }, 0);
+  
+  const totalFilteredSales = filteredSales.reduce((sum, sale) => {
+    const saleTotal = parseFloat(sale.total) || 0;
+    // ตรวจสอบว่าจำนวนเงินไม่เกินค่าที่สมเหตุสมผล
+    if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+      console.warn('Invalid sale total detected:', sale);
+      return sum;
+    }
+    return sum + saleTotal;
+  }, 0);
 
   const salesChange = totalSalesYesterday > 0 
     ? ((totalSalesToday - totalSalesYesterday) / totalSalesYesterday) * 100
@@ -130,7 +234,7 @@ const Dashboard = () => {
   const stats = [
     {
       title: getDateFilterLabel(),
-      value: `฿${totalFilteredSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      value: `฿${totalFilteredSales.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`,
       change: dateFilter === 'today' ? `${salesChange.toFixed(1)}%` : '',
       trend: dateFilter === 'today' ? (salesChange >= 0 ? 'up' : 'down') : null,
       icon: DollarSign,
@@ -167,12 +271,29 @@ const Dashboard = () => {
   const recentSales = filteredSales.slice(0, 5);
   
   const productSales = filteredSales.reduce((acc, sale) => {
-    sale.items.forEach(item => {
-      if (!acc[item.id]) {
-        acc[item.id] = { name: item.name, sold: 0, revenue: 0 };
+    const items = sale.items || [];
+    items.forEach(item => {
+      const itemId = item.product_id || item.id;
+      const itemName = item.product_name || item.name;
+      const itemQuantity = parseInt(item.quantity) || 0;
+      const itemPrice = parseFloat(item.price) || 0;
+      
+      // ตรวจสอบว่าข้อมูลถูกต้อง
+      if (isNaN(itemQuantity) || itemQuantity < 0 || itemQuantity > 10000) {
+        console.warn('Invalid item quantity detected:', item);
+        return;
       }
-      acc[item.id].sold += item.quantity;
-      acc[item.id].revenue += item.quantity * item.price;
+      
+      if (isNaN(itemPrice) || itemPrice < 0 || itemPrice > 100000) {
+        console.warn('Invalid item price detected:', item);
+        return;
+      }
+      
+      if (!acc[itemId]) {
+        acc[itemId] = { name: itemName, sold: 0, revenue: 0 };
+      }
+      acc[itemId].sold += itemQuantity;
+      acc[itemId].revenue += itemQuantity * itemPrice;
     });
     return acc;
   }, {});
@@ -200,17 +321,25 @@ const Dashboard = () => {
       return;
     }
 
-    const dataToExport = sales.map(sale => ({
-      'Sale ID': sale.id,
-      'Timestamp': new Date(sale.timestamp).toLocaleString('th-TH'),
-      'Customer': sale.customer,
-      'Subtotal': sale.subtotal.toFixed(2),
-      'Discount': (sale.discount || 0).toFixed(2),
-      'Tax': sale.tax.toFixed(2),
-      'Total': sale.total.toFixed(2),
-      'Payment Method': sale.paymentMethod,
-      'Items': sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')
-    }));
+    const dataToExport = sales.map(sale => {
+      // ตรวจสอบและแก้ไขข้อมูลยอดขาย
+      const subtotal = parseFloat(sale.subtotal || 0);
+      const discount = parseFloat(sale.discount || 0);
+      const tax = parseFloat(sale.tax || 0);
+      const total = parseFloat(sale.total || 0);
+      
+      return {
+        'Sale ID': sale.id,
+        'Timestamp': new Date(sale.created_at || sale.timestamp).toLocaleString('th-TH'),
+        'Customer': sale.customer_name || sale.customer || 'ลูกค้าทั่วไป',
+        'Subtotal': isNaN(subtotal) ? '0.00' : subtotal.toFixed(2),
+        'Discount': isNaN(discount) ? '0.00' : discount.toFixed(2),
+        'Tax': isNaN(tax) ? '0.00' : tax.toFixed(2),
+        'Total': isNaN(total) ? '0.00' : total.toFixed(2),
+        'Payment Method': sale.payment_method || sale.paymentMethod,
+        'Items': (sale.items || []).map(item => `${item.product_name || item.name} (x${item.quantity})`).join(', ')
+      };
+    });
 
     const csv = Papa.unparse(dataToExport);
     const blob = new Blob(["\uFEFF" + csv], { type: 'text/csv;charset=utf-8;' });
@@ -228,7 +357,51 @@ const Dashboard = () => {
     });
   };
 
-      return (
+  // Loading state
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">แดชบอร์ด</h1>
+            <p className="text-gray-600 mt-1">กำลังโหลดข้อมูล...</p>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white rounded-xl p-6 shadow-sm border animate-pulse">
+              <div className="flex items-center justify-between">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+              </div>
+              <div className="mt-4">
+                <div className="h-8 bg-gray-200 rounded w-20 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-32"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">แดชบอร์ด</h1>
+            <p className="text-red-600 mt-1">{error}</p>
+          </div>
+          <Button onClick={() => window.location.reload()}>
+            ลองใหม่อีกครั้ง
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -334,7 +507,6 @@ const Dashboard = () => {
         <h2 className="text-xl font-semibold text-gray-900 mb-6">แนวโน้มยอดขาย</h2>
         <div className="h-64 flex items-end justify-between space-x-2">
           {(() => {
-            const chartData = [];
             const days = dateFilter === 'week' ? 7 : dateFilter === 'month' ? 30 : dateFilter === 'year' ? 12 : 7;
             const maxSales = Math.max(...Array.from({ length: days }, (_, i) => {
               const date = new Date();
@@ -342,13 +514,27 @@ const Dashboard = () => {
                 date.setMonth(date.getMonth() - (days - 1 - i));
                 const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
                 const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-                return sales.filter(sale => {
-                  const saleDate = new Date(sale.timestamp);
+                const monthSales = sales.filter(sale => {
+                  const saleDate = new Date(sale.created_at || sale.timestamp);
                   return saleDate >= monthStart && saleDate < monthEnd;
-                }).reduce((sum, sale) => sum + sale.total, 0);
+                }).reduce((sum, sale) => {
+                  const saleTotal = parseFloat(sale.total) || 0;
+                  if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                    return sum;
+                  }
+                  return sum + saleTotal;
+                }, 0);
+                return isNaN(monthSales) ? 0 : monthSales;
               } else {
                 date.setDate(date.getDate() - (days - 1 - i));
-                return getSalesOnDate(date).reduce((sum, sale) => sum + sale.total, 0);
+                const daySales = getSalesOnDate(date).reduce((sum, sale) => {
+                  const saleTotal = parseFloat(sale.total) || 0;
+                  if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                    return sum;
+                  }
+                  return sum + saleTotal;
+                }, 0);
+                return isNaN(daySales) ? 0 : daySales;
               }
             })) || 1;
 
@@ -361,24 +547,42 @@ const Dashboard = () => {
                 label = date.toLocaleDateString('th-TH', { month: 'short' });
                 const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
                 const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 1);
-                salesAmount = sales.filter(sale => {
-                  const saleDate = new Date(sale.timestamp);
+                const monthSales = sales.filter(sale => {
+                  const saleDate = new Date(sale.created_at || sale.timestamp);
                   return saleDate >= monthStart && saleDate < monthEnd;
-                }).reduce((sum, sale) => sum + sale.total, 0);
+                }).reduce((sum, sale) => {
+                  const saleTotal = parseFloat(sale.total) || 0;
+                  if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                    return sum;
+                  }
+                  return sum + saleTotal;
+                }, 0);
+                salesAmount = isNaN(monthSales) ? 0 : monthSales;
               } else {
                 date.setDate(date.getDate() - (days - 1 - i));
                 label = date.getDate().toString();
-                salesAmount = getSalesOnDate(date).reduce((sum, sale) => sum + sale.total, 0);
+                const daySales = getSalesOnDate(date).reduce((sum, sale) => {
+                  const saleTotal = parseFloat(sale.total) || 0;
+                  if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                    return sum;
+                  }
+                  return sum + saleTotal;
+                }, 0);
+                salesAmount = isNaN(daySales) ? 0 : daySales;
               }
               
               const height = maxSales > 0 ? (salesAmount / maxSales) * 200 : 0;
+              
+              // ตรวจสอบว่าค่าที่คำนวณได้สมเหตุสมผล
+              const validHeight = isNaN(height) || height < 0 || height > 200 ? 0 : height;
+              const validSalesAmount = isNaN(salesAmount) || salesAmount < 0 || salesAmount > 1000000 ? 0 : salesAmount;
               
               return (
                 <div key={i} className="flex flex-col items-center flex-1">
                   <div 
                     className="w-full bg-gradient-to-t from-blue-500 to-blue-300 rounded-t-md transition-all duration-300 hover:from-blue-600 hover:to-blue-400 min-h-[4px]"
-                    style={{ height: `${height}px` }}
-                    title={`${label}: ฿${salesAmount.toLocaleString()}`}
+                    style={{ height: `${validHeight}px` }}
+                    title={`${label}: ฿${parseFloat(validSalesAmount || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`}
                   />
                   <span className="text-xs text-gray-500 mt-2">{label}</span>
                 </div>
@@ -430,14 +634,26 @@ const Dashboard = () => {
                 }
                 
                 return sales.filter(sale => {
-                  const saleDate = new Date(sale.timestamp);
+                  const saleDate = new Date(sale.created_at || sale.timestamp);
                   return saleDate >= prevStartDate && saleDate < prevEndDate;
                 });
               };
 
               const previousPeriodSales = getPreviousPeriodSales();
-              const currentPeriodTotal = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-              const previousPeriodTotal = previousPeriodSales.reduce((sum, sale) => sum + sale.total, 0);
+              const currentPeriodTotal = filteredSales.reduce((sum, sale) => {
+                const saleTotal = parseFloat(sale.total) || 0;
+                if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                  return sum;
+                }
+                return sum + saleTotal;
+              }, 0);
+              const previousPeriodTotal = previousPeriodSales.reduce((sum, sale) => {
+                const saleTotal = parseFloat(sale.total) || 0;
+                if (isNaN(saleTotal) || saleTotal < 0 || saleTotal > 1000000) {
+                  return sum;
+                }
+                return sum + saleTotal;
+              }, 0);
               
               const salesGrowth = previousPeriodTotal > 0 
                 ? ((currentPeriodTotal - previousPeriodTotal) / previousPeriodTotal) * 100
@@ -449,9 +665,14 @@ const Dashboard = () => {
 
               const avgOrderValueCurrent = filteredSales.length > 0 ? currentPeriodTotal / filteredSales.length : 0;
               const avgOrderValuePrevious = previousPeriodSales.length > 0 ? previousPeriodTotal / previousPeriodSales.length : 0;
-              const avgOrderGrowth = avgOrderValuePrevious > 0
-                ? ((avgOrderValueCurrent - avgOrderValuePrevious) / avgOrderValuePrevious) * 100
-                : (avgOrderValueCurrent > 0 ? 100 : 0);
+              
+              // ตรวจสอบว่าค่าที่คำนวณได้สมเหตุสมผล
+              const validAvgOrderValueCurrent = isNaN(avgOrderValueCurrent) || avgOrderValueCurrent < 0 || avgOrderValueCurrent > 1000000 ? 0 : avgOrderValueCurrent;
+              const validAvgOrderValuePrevious = isNaN(avgOrderValuePrevious) || avgOrderValuePrevious < 0 || avgOrderValuePrevious > 1000000 ? 0 : avgOrderValuePrevious;
+              
+              const avgOrderGrowth = validAvgOrderValuePrevious > 0
+                ? ((validAvgOrderValueCurrent - validAvgOrderValuePrevious) / validAvgOrderValuePrevious) * 100
+                : (validAvgOrderValueCurrent > 0 ? 100 : 0);
 
               const getPeriodLabel = () => {
                 switch (dateFilter) {
@@ -479,8 +700,8 @@ const Dashboard = () => {
                 },
                 {
                   title: 'มูลค่าเฉลี่ยต่อออเดอร์',
-                  current: avgOrderValueCurrent,
-                  previous: avgOrderValuePrevious,
+                  current: validAvgOrderValueCurrent,
+                  previous: validAvgOrderValuePrevious,
                   growth: avgOrderGrowth,
                   format: 'currency'
                 }
@@ -491,13 +712,13 @@ const Dashboard = () => {
                     <div className="space-y-1">
                       <p className="text-2xl font-bold text-gray-900">
                         {stat.format === 'currency' 
-                          ? `฿${stat.current.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+                          ? `฿${parseFloat(stat.current || 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` 
                           : stat.current.toLocaleString()
                         }
                       </p>
                       <p className="text-sm text-gray-500">
                         {getPeriodLabel()}: {stat.format === 'currency' 
-                          ? `฿${stat.previous.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` 
+                          ? `฿${parseFloat(stat.previous || 0).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}` 
                           : stat.previous.toLocaleString()
                         }
                       </p>
@@ -541,16 +762,16 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-3">
                   <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm font-medium">
-                      {sale.customer.charAt(0).toUpperCase()}
+                      {(sale.customer_name || sale.customer || 'ลูกค้าทั่วไป').charAt(0).toUpperCase()}
                     </span>
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{sale.customer}</p>
-                    <p className="text-sm text-gray-500">{sale.items.length} รายการ • {new Date(sale.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="font-medium text-gray-900">{sale.customer_name || sale.customer || 'ลูกค้าทั่วไป'}</p>
+                    <p className="text-sm text-gray-500">{sale.items?.length || 0} รายการ • {new Date(sale.created_at || sale.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">฿{sale.total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                  <p className="font-semibold text-gray-900">฿{parseFloat(sale.total || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</p>
                 </div>
               </div>
             ))}
@@ -582,7 +803,7 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="font-semibold text-gray-900">฿{product.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+                  <p className="font-semibold text-gray-900">฿{parseFloat(product.revenue || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}</p>
                 </div>
               </div>
             ))}

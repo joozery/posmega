@@ -11,8 +11,9 @@ const ProtectedRoute = ({ children, requiredPermissions = [], fallback = null })
   const handleLogout = async () => {
     console.log('🚪 ProtectedRoute.handleLogout - starting logout...');
     await logout();
-    console.log('🚪 ProtectedRoute.handleLogout - logout completed, reloading page');
-    window.location.reload();
+    console.log('🚪 ProtectedRoute.handleLogout - logout completed, redirecting to login');
+    // Redirect to login page
+    window.location.replace('/login');
   };
 
   // ตรวจสอบการเข้าสู่ระบบ
@@ -23,7 +24,7 @@ const ProtectedRoute = ({ children, requiredPermissions = [], fallback = null })
           <Shield className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-600 mb-2">กรุณาเข้าสู่ระบบ</h2>
           <p className="text-gray-500 mb-4">คุณต้องเข้าสู่ระบบก่อนเข้าถึงหน้านี้</p>
-          <Button onClick={() => window.location.reload()}>
+          <Button onClick={() => window.location.replace('/login')}>
             กลับไปหน้าเข้าสู่ระบบ
           </Button>
         </div>

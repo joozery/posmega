@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,6 +12,13 @@ const LoginDialog = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Redirect to login page if not on /login path
+  useEffect(() => {
+    if (window.location.pathname !== '/login') {
+      window.history.replaceState(null, '', '/login');
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

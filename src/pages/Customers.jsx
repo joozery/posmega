@@ -42,16 +42,37 @@ const Customers = () => {
       const response = await customerService.getAllCustomers();
       const customersData = response.customers || [];
       
-      // Transform customer data to match frontend expectations
-      const transformedCustomers = customersData.map(customer => ({
-        ...customer,
-        loyaltyPoints: customer.loyalty_points || 0,
-        totalPurchases: customer.total_purchases || 0, // จำนวนครั้ง
-        totalSpent: customer.total_spent || 0, // ยอดเงิน
-        lastPurchase: customer.last_purchase,
-        joinDate: customer.created_at ? customer.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
-      }));
+      console.log('🔍 Raw API Response:', response);
+      console.log('🔍 Raw Customers Data:', customersData);
       
+      // Transform customer data to match frontend expectations
+      const transformedCustomers = customersData.map(customer => {
+        const transformed = {
+          ...customer,
+          loyaltyPoints: customer.loyalty_points || 0,
+          totalPurchases: customer.total_purchases || 0, // จำนวนครั้ง
+          totalSpent: customer.total_spent || 0, // ยอดเงิน
+          lastPurchase: customer.last_purchase,
+          joinDate: customer.created_at ? customer.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
+        };
+        
+        console.log(`🔍 Customer ${customer.id} (${customer.name}):`, {
+          original: {
+            total_purchases: customer.total_purchases,
+            total_spent: customer.total_spent,
+            loyalty_points: customer.loyalty_points
+          },
+          transformed: {
+            totalPurchases: transformed.totalPurchases,
+            totalSpent: transformed.totalSpent,
+            loyaltyPoints: transformed.loyaltyPoints
+          }
+        });
+        
+        return transformed;
+      });
+      
+      console.log('🔍 Transformed Customers:', transformedCustomers);
       setCustomers(transformedCustomers);
       
       closeLoading();
@@ -158,8 +179,29 @@ const Customers = () => {
   };
 
   const totalCustomers = customers.length;
-  const totalRevenue = customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
-  const avgPurchase = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
+  
+  // แก้ไขการคำนวณ totalRevenue ให้ปลอดภัย
+  const totalRevenue = customers.reduce((sum, c) => {
+    const spent = parseFloat(c.totalSpent) || 0;
+    return sum + spent;
+  }, 0);
+  
+  // แก้ไขการคำนวณ avgPurchase ให้ปลอดภัย
+  const avgPurchase = totalCustomers > 0 && totalRevenue > 0 ? totalRevenue / totalCustomers : 0;
+  
+  // Debug logging
+  console.log('🔍 Customer Stats Debug:', {
+    totalCustomers,
+    totalRevenue,
+    avgPurchase,
+    customers: customers.map(c => ({
+      id: c.id,
+      name: c.name,
+      totalSpent: c.totalSpent,
+      totalSpentType: typeof c.totalSpent,
+      totalSpentParsed: parseFloat(c.totalSpent) || 0
+    }))
+  });
 
   // Show loading state
   if (loading) {
@@ -211,12 +253,16 @@ const Customers = () => {
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <Calendar className="w-8 h-8 text-green-600 mb-3" />
-          <h3 className="text-2xl font-bold text-gray-900">฿{totalRevenue.toLocaleString()}</h3>
+          <h3 className="text-2xl font-bold text-gray-900">
+            {isNaN(totalRevenue) ? '฿0' : `฿${totalRevenue.toLocaleString()}`}
+          </h3>
           <p className="text-gray-600 text-sm mt-1">ยอดขายรวม</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <User className="w-8 h-8 text-purple-600 mb-3" />
-          <h3 className="text-2xl font-bold text-gray-900">฿{avgPurchase.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
+          <h3 className="text-2xl font-bold text-gray-900">
+            {isNaN(avgPurchase) ? '฿0' : `฿${avgPurchase.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          </h3>
           <p className="text-gray-600 text-sm mt-1">ยอดซื้อเฉลี่ย</p>
         </motion.div>
       </div>
@@ -253,7 +299,10 @@ const Customers = () => {
                 <div>
                   <h3 className="font-semibold text-gray-900">{customer.name || 'ไม่มีชื่อ'}</h3>
                   <p className="text-sm text-gray-500">
-                                          สมาชิกตั้งแต่ {customer.joinDate ? new Date(customer.joinDate).toLocaleDateString('th-TH') : 'ไม่ระบุ'}
+                    สมาชิกตั้งแต่ {customer.joinDate && !isNaN(new Date(customer.joinDate).getTime()) 
+                      ? new Date(customer.joinDate).toLocaleDateString('th-TH') 
+                      : 'ไม่ระบุ'
+                    }
                   </p>
                 </div>
               </div>
@@ -273,22 +322,29 @@ const Customers = () => {
                             <div className="flex justify-between items-center mb-2">
                 <div>
                   <p className="text-sm text-gray-600">ยอดซื้อรวม</p>
-                  <p className="font-semibold text-green-600">฿{(customer.totalSpent || 0).toLocaleString()}</p>
+                  <p className="font-semibold text-green-600">
+                    ฿{isNaN(parseFloat(customer.totalSpent)) ? '0' : parseFloat(customer.totalSpent || 0).toLocaleString()}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-sm text-gray-600">จำนวนครั้ง</p>
-                  <p className="text-sm font-medium">{customer.totalPurchases || 0} ครั้ง</p>
+                  <p className="text-sm font-medium">{isNaN(parseInt(customer.totalPurchases)) ? '0' : parseInt(customer.totalPurchases || 0)} ครั้ง</p>
                 </div>
               </div>
               <div className="flex justify-between items-center mb-2">
                 <div>
                   <p className="text-sm text-gray-600">ซื้อล่าสุด</p>
-                  <p className="text-sm font-medium">{customer.lastPurchase ? new Date(customer.lastPurchase).toLocaleDateString('th-TH') : 'ยังไม่มี'}</p>
+                  <p className="text-sm font-medium">
+                    {customer.lastPurchase && !isNaN(new Date(customer.lastPurchase).getTime()) 
+                      ? new Date(customer.lastPurchase).toLocaleDateString('th-TH') 
+                      : 'ยังไม่มี'
+                    }
+                  </p>
                 </div>
               </div>
               <div className="flex items-center justify-center space-x-2 text-sm text-yellow-600 bg-yellow-100 p-2 rounded-lg">
                 <Star className="w-4 h-4 text-yellow-500" />
-                <span className="font-medium">แต้มสะสม: {customer.loyaltyPoints || 0} แต้ม</span>
+                <span className="font-medium">แต้มสะสม: {isNaN(parseInt(customer.loyaltyPoints)) ? '0' : parseInt(customer.loyaltyPoints || 0)} แต้ม</span>
               </div>
             </div>
           </motion.div>

@@ -97,6 +97,10 @@ export const useAuth = () => {
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        // Redirect to login if not authenticated and not already on login page
+        if (window.location.pathname !== '/login') {
+          window.location.replace('/login');
+        }
       }
       setLoading(false);
     };
@@ -107,11 +111,14 @@ export const useAuth = () => {
   // เข้าสู่ระบบ
   const login = useCallback(async (username, password) => {
     try {
+      console.log('🔐 Login attempt:', { username });
       const { user, token } = await authService.login(username, password);
+      console.log('✅ Login successful:', { user, role: user.role });
+      
       setCurrentUser(user);
       setIsAuthenticated(true);
       toast({ title: "เข้าสู่ระบบสำเร็จ", description: `ยินดีต้อนรับ ${user.name}` });
-      return true;
+      return { success: true, user };
     } catch (error) {
       console.error('Login error:', error);
       const errorMessage = error.response?.data?.error || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
@@ -120,7 +127,7 @@ export const useAuth = () => {
         description: errorMessage, 
         variant: "destructive" 
       });
-      return false;
+      return { success: false, user: null };
     }
   }, [toast]);
 
@@ -134,6 +141,8 @@ export const useAuth = () => {
       setCurrentUser(null);
       setIsAuthenticated(false);
       toast({ title: "ออกจากระบบสำเร็จ", description: "ขอบคุณที่ใช้งาน" });
+      // Redirect to login page and clear path
+      window.location.replace('/login');
     }
   }, [toast]);
 
