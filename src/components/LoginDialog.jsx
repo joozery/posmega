@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Lock, User, Eye, EyeOff } from 'lucide-react';
 
 const LoginDialog = () => {
-  const { login } = useAuth();
+  const { login, currentUser } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -19,13 +19,35 @@ const LoginDialog = () => {
 
     console.log('LoginDialog: Submitting login form', { username, password });
     setIsLoading(true);
-    const success = await login(username, password);
-    console.log('LoginDialog: Login result', { success });
-    setIsLoading(false);
     
-    if (success) {
-      setUsername('');
-      setPassword('');
+    try {
+      const result = await login(username, password);
+      console.log('LoginDialog: Login result', result);
+      
+      if (result.success && result.user) {
+        setUsername('');
+        setPassword('');
+        
+        // Redirect ตาม role หลังจาก login สำเร็จ
+        const user = result.user;
+        const roleKey = user.role?.toUpperCase();
+        console.log('🎯 Redirecting based on role:', { roleKey, userRole: user.role });
+        
+        // ใช้ setTimeout เพื่อให้ redirect เร็วขึ้น
+        setTimeout(() => {
+          if (roleKey === 'ADMIN' || roleKey === 'MANAGER') {
+            console.log('📊 Redirecting to dashboard for admin/manager');
+            window.location.href = '/dashboard';
+          } else {
+            console.log('🛒 Redirecting to POS for cashier/viewer');
+            window.location.href = '/pos';
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('LoginDialog: Login error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -39,10 +61,16 @@ const LoginDialog = () => {
         <div className="bg-white rounded-2xl shadow-xl p-8">
           <div className="text-center mb-8">
             <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-8 h-8 text-white" />
+              {isLoading ? (
+                <div className="w-8 h-8 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              ) : (
+                <Lock className="w-8 h-8 text-white" />
+              )}
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">เข้าสู่ระบบ</h1>
-            <p className="text-gray-600">ระบบ Point of Sale</p>
+            <p className="text-gray-600">
+              {isLoading ? 'กำลังตรวจสอบข้อมูล...' : 'ระบบ Point of Sale'}
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -96,9 +124,9 @@ const LoginDialog = () => {
               disabled={isLoading || !username || !password}
             >
               {isLoading ? (
-                <div className="flex items-center">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  กำลังเข้าสู่ระบบ...
+                <div className="flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-3"></div>
+                  <span>กำลังเข้าสู่ระบบ...</span>
                 </div>
               ) : (
                 'เข้าสู่ระบบ'

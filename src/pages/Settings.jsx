@@ -3,14 +3,14 @@ import { motion } from 'framer-motion';
 import { Settings as SettingsIcon, CreditCard, ListPlus, Barcode, Star, MessageSquare, Store, Upload, X } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/components/ui/use-toast';
 import BarcodeSettingsTab from '@/components/settings/BarcodeSettingsTab';
 import LoyaltySettingsTab from '@/components/settings/LoyaltySettingsTab';
 import NotificationSettingsTab from '@/components/settings/NotificationSettingsTab';
 import { settingsService } from '@/services/settingsService';
+import { categoriesService } from '@/services/categoriesService';
+import { showSuccess, showError, showLoading, closeLoading } from '@/utils/sweetalert';
 
 const Settings = () => {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -25,12 +25,23 @@ const Settings = () => {
       website: '',
       taxId: ''
     },
-    payment: { promptpayId: '', stripePublishableKey: '', stripePriceId: '' },
+    payment: { 
+      promptpayId: '', 
+      promptpayEnabled: false,
+      stripePublishableKey: '', 
+      stripePriceId: '',
+      stripeEnabled: false,
+      cashEnabled: true,
+      defaultPaymentMethod: 'cash',
+      allowMultiplePaymentMethods: false
+    },
     categories: ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ'],
     loyalty: { purchaseAmountForOnePoint: 100, onePointValueInBaht: 1 },
     notifications: { lineChannelAccessToken: '', lineUserId: '', notifyOnSale: false }
   });
   const [newCategory, setNewCategory] = useState('');
+  const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   
   // Load settings from API on component mount
   useEffect(() => {
@@ -52,56 +63,60 @@ const Settings = () => {
           apiSettings.system.logo_url = apiSettings.system.logo;
         }
         
-        // Handle categories - ensure it's always an array
-        let categories = ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']; // Default categories
-        if (apiSettings.categories) {
-          if (Array.isArray(apiSettings.categories)) {
-            categories = apiSettings.categories;
-          } else if (typeof apiSettings.categories === 'string') {
-            // If it's a string, try to parse it as JSON
-            try {
-              const parsed = JSON.parse(apiSettings.categories);
-              if (Array.isArray(parsed)) {
-                categories = parsed;
-              }
-            } catch (e) {
-              console.warn('Failed to parse categories as JSON:', apiSettings.categories);
-            }
-          }
+        // Load categories from categories API
+        try {
+          setCategoriesLoading(true);
+          const categoriesResponse = await categoriesService.getAllCategories(true); // active only
+          const categoriesData = categoriesResponse.categories || [];
+          setCategories(categoriesData);
+          
+          // Also set in settings for backward compatibility
+          setSettings(prev => ({
+            ...prev,
+            system: { ...prev.system, ...apiSettings.system },
+            payment: { ...prev.payment, ...apiSettings.payment },
+            loyalty: { ...prev.loyalty, ...apiSettings.loyalty },
+            notifications: { ...prev.notifications, ...apiSettings.notifications },
+            categories: categoriesData.map(cat => cat.name)
+          }));
+        } catch (error) {
+          console.warn('Failed to load categories from API, using defaults:', error);
+          const fallbackCategories = ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ'];
+          setCategories(fallbackCategories.map(name => ({ id: null, name, description: '', color: '#3B82F6', icon: 'folder' })));
+          
+          setSettings(prev => ({
+            ...prev,
+            system: { ...prev.system, ...apiSettings.system },
+            payment: { ...prev.payment, ...apiSettings.payment },
+            loyalty: { ...prev.loyalty, ...apiSettings.loyalty },
+            notifications: { ...prev.notifications, ...apiSettings.notifications },
+            categories: fallbackCategories
+          }));
+        } finally {
+          setCategoriesLoading(false);
         }
-        
-        setSettings(prev => ({
-          ...prev,
-          system: { ...prev.system, ...apiSettings.system },
-          payment: { ...prev.payment, ...apiSettings.payment },
-          loyalty: { ...prev.loyalty, ...apiSettings.loyalty },
-          notifications: { ...prev.notifications, ...apiSettings.notifications },
-          categories: categories
-        }));
       } catch (error) {
         console.error('Error loading settings:', error);
-        toast({
-          title: "เกิดข้อผิดพลาด",
-          description: "ไม่สามารถโหลดการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง",
-          variant: "destructive"
-        });
+        showError(
+          "เกิดข้อผิดพลาด",
+          "ไม่สามารถโหลดการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง"
+        );
       } finally {
         setLoading(false);
       }
     };
 
     loadSettings();
-  }, [toast]);
+  }, []);
 
   const handleLogoUpload = async (event) => {
     const file = event.target.files[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast({ 
-          title: "ไฟล์ใหญ่เกินไป", 
-          description: "กรุณาเลือกไฟล์ที่มีขนาดไม่เกิน 5MB",
-          variant: "destructive"
-        });
+        showError(
+          "ไฟล์ใหญ่เกินไป",
+          "กรุณาเลือกไฟล์ที่มีขนาดไม่เกิน 5MB"
+        );
         return;
       }
       
@@ -116,14 +131,13 @@ const Settings = () => {
         setUploadingLogo(true);
         const result = await settingsService.uploadLogo(file);
         handleSystemChange('logo', result.logo_url);
-        toast({ title: "อัปโหลดโลโก้สำเร็จ", description: "โลโก้ของคุณถูกบันทึกแล้ว" });
+        showSuccess("อัปโหลดโลโก้สำเร็จ", "โลโก้ของคุณถูกบันทึกแล้ว");
       } catch (error) {
         console.error('Error uploading logo:', error);
-        toast({
-          title: "เกิดข้อผิดพลาด",
-          description: "ไม่สามารถอัปโหลดโลโก้ได้ กรุณาลองใหม่อีกครั้ง",
-          variant: "destructive"
-        });
+        showError(
+          "เกิดข้อผิดพลาด",
+          "ไม่สามารถอัปโหลดโลโก้ได้ กรุณาลองใหม่อีกครั้ง"
+        );
       } finally {
         setUploadingLogo(false);
       }
@@ -134,44 +148,89 @@ const Settings = () => {
     try {
       await settingsService.deleteLogo();
       handleSystemChange('logo', '');
-      toast({ title: "ลบโลโก้สำเร็จ", description: "โลโก้ถูกลบออกแล้ว" });
+      showSuccess("ลบโลโก้สำเร็จ", "โลโก้ถูกลบออกแล้ว");
     } catch (error) {
       console.error('Error removing logo:', error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถลบโลโก้ได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive"
-      });
+      showError(
+        "เกิดข้อผิดพลาด",
+        "ไม่สามารถลบโลโก้ได้ กรุณาลองใหม่อีกครั้ง"
+      );
     }
   };
 
   const handleSave = async () => {
     try {
       setSaving(true);
+      showLoading("กำลังบันทึกการตั้งค่า...", "กรุณารอสักครู่ (อาจใช้เวลานานเนื่องจาก Heroku)");
       
       // Prepare settings data for API
       const settingsForAPI = {
-        ...settings,
         system: {
           ...settings.system,
           // Map logo to logo_url for API compatibility
-          logo_url: settings.system.logo,
+          logo_url: settings.system?.logo || '',
           // Remove the logo field to avoid confusion
           logo: undefined
         },
-        categories: Array.isArray(settings.categories) ? settings.categories : ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']
+        payment: {
+          ...settings.payment,
+          // Ensure all payment settings are strings
+          promptpayEnabled: String(settings.payment?.promptpayEnabled || false),
+          stripeEnabled: String(settings.payment?.stripeEnabled || false),
+          cashEnabled: String(settings.payment?.cashEnabled || true),
+          allowMultiplePaymentMethods: String(settings.payment?.allowMultiplePaymentMethods || false)
+        },
+        loyalty: {
+          ...settings.loyalty
+        },
+        notifications: {
+          ...settings.notifications,
+          // Ensure notifyOnSale is string
+          notifyOnSale: String(settings.notifications?.notifyOnSale || false)
+        }
+        // Categories are now managed separately via categories API
+        // No need to include categories in settings payload
       };
       
+      console.log('🔧 Settings data being sent to API:', JSON.stringify(settingsForAPI, null, 2));
+      
+      // Add timeout warning
+      const timeoutWarning = setTimeout(() => {
+        showLoading('กำลังบันทึกการตั้งค่า...', 'ใช้เวลานานกว่าปกติ กรุณารอสักครู่ (Heroku อาจกำลัง startup)');
+      }, 10000); // Show warning after 10 seconds
+      
       await settingsService.updateSettings(settingsForAPI);
+      
+      clearTimeout(timeoutWarning);
       window.dispatchEvent(new Event('settings_updated'));
-      toast({ title: "บันทึกการตั้งค่าสำเร็จ", description: "การตั้งค่าของคุณถูกบันทึกแล้ว" });
+      
+      closeLoading();
+      showSuccess(
+        "บันทึกการตั้งค่าสำเร็จ",
+        "การตั้งค่าของคุณถูกบันทึกแล้ว"
+      );
     } catch (error) {
       console.error('Error saving settings:', error);
-      toast({
-        title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถบันทึกการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง",
-        variant: "destructive"
-      });
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
+      
+      closeLoading();
+      
+      // Show more specific error message for timeout
+      let errorMessage = "ไม่สามารถบันทึกการตั้งค่าได้ กรุณาลองใหม่อีกครั้ง";
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        errorMessage = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง (Heroku อาจกำลัง startup)';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      showError(
+        "เกิดข้อผิดพลาด",
+        errorMessage
+      );
     } finally {
       setSaving(false);
     }
@@ -193,15 +252,63 @@ const Settings = () => {
     setSettings(prev => ({ ...prev, notifications: { ...prev.notifications, [field]: value } }));
   };
 
-  const handleAddCategory = () => {
-    if (newCategory && !settings.categories.includes(newCategory)) {
-      setSettings(prev => ({ ...prev, categories: [...prev.categories, newCategory] }));
+  const handleAddCategory = async () => {
+    if (!newCategory.trim()) return;
+    
+    try {
+      setCategoriesLoading(true);
+      
+      // Create new category via API
+      const categoryData = {
+        name: newCategory.trim(),
+        description: `หมวดหมู่ ${newCategory.trim()}`,
+        color: '#3B82F6',
+        icon: 'folder',
+        sort_order: categories.length + 1
+      };
+      
+      const result = await categoriesService.createCategory(categoryData);
+      
+      // Add to local state
+      setCategories(prev => [...prev, result.category]);
+      setSettings(prev => ({ 
+        ...prev, 
+        categories: [...prev.categories, result.category.name] 
+      }));
+      
       setNewCategory('');
+      showSuccess('เพิ่มหมวดหมู่สำเร็จ', 'หมวดหมู่ใหม่ถูกเพิ่มแล้ว');
+    } catch (error) {
+      console.error('Error adding category:', error);
+      const errorMessage = error.response?.data?.error || 'ไม่สามารถเพิ่มหมวดหมู่ได้';
+      showError('เกิดข้อผิดพลาด', errorMessage);
+    } finally {
+      setCategoriesLoading(false);
     }
   };
 
-  const handleRemoveCategory = (categoryToRemove) => {
-    setSettings(prev => ({ ...prev, categories: prev.categories.filter(c => c !== categoryToRemove) }));
+  const handleRemoveCategory = async (categoryToRemove) => {
+    try {
+      // Find category object
+      const categoryObj = categories.find(cat => cat.name === categoryToRemove);
+      
+      if (categoryObj && categoryObj.id) {
+        // Delete via API if it has an ID
+        await categoriesService.deleteCategory(categoryObj.id, true); // force delete
+        showSuccess('ลบหมวดหมู่สำเร็จ', 'หมวดหมู่ถูกลบแล้ว');
+      }
+      
+      // Remove from local state
+      setCategories(prev => prev.filter(cat => cat.name !== categoryToRemove));
+      setSettings(prev => ({ 
+        ...prev, 
+        categories: prev.categories.filter(c => c !== categoryToRemove) 
+      }));
+    } catch (error) {
+      console.error('Error removing category:', error);
+      const errorMessage = error.response?.data?.error || 'ไม่สามารถลบหมวดหมู่ได้';
+      showError('เกิดข้อผิดพลาด', errorMessage);
+    }
   };
 
   if (loading) {
@@ -404,19 +511,126 @@ const Settings = () => {
         </TabsContent>
         <TabsContent value="payment" className="mt-6">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl p-6 shadow-sm border">
-            <h3 className="text-xl font-semibold mb-4">ตั้งค่าการชำระเงิน</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">PromptPay ID (เบอร์โทรศัพท์/เลขบัตรประชาชน)</label>
-                <input type="text" value={settings.payment.promptpayId} onChange={e => handlePaymentChange('promptpayId', e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+            <h3 className="text-xl font-semibold mb-6">ตั้งค่าการชำระเงิน</h3>
+            
+            {/* Cash Payment */}
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <h4 className="text-lg font-medium mb-3 text-gray-800">💰 เงินสด</h4>
+              <div className="flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="cashEnabled" 
+                  checked={settings.payment.cashEnabled} 
+                  onChange={e => handlePaymentChange('cashEnabled', e.target.checked)} 
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <label htmlFor="cashEnabled" className="ml-2 text-sm font-medium text-gray-700">เปิดใช้งานการชำระด้วยเงินสด</label>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Publishable Key</label>
-                <input type="text" value={settings.payment.stripePublishableKey} onChange={e => handlePaymentChange('stripePublishableKey', e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+            </div>
+
+            {/* PromptPay Payment */}
+            <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+              <h4 className="text-lg font-medium mb-3 text-blue-800">📱 PromptPay</h4>
+              <div className="space-y-3">
+                <div className="flex items-center mb-3">
+                  <input 
+                    type="checkbox" 
+                    id="promptpayEnabled" 
+                    checked={settings.payment.promptpayEnabled} 
+                    onChange={e => handlePaymentChange('promptpayEnabled', e.target.checked)} 
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="promptpayEnabled" className="ml-2 text-sm font-medium text-gray-700">เปิดใช้งาน PromptPay</label>
+                </div>
+                
+                {settings.payment.promptpayEnabled && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">PromptPay ID (เบอร์โทรศัพท์/เลขบัตรประชาชน)</label>
+                    <input 
+                      type="text" 
+                      value={settings.payment.promptpayId} 
+                      onChange={e => handlePaymentChange('promptpayId', e.target.value)} 
+                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="0812345678 หรือ 1234567890123"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">หมายเลขโทรศัพท์หรือเลขบัตรประชาชนที่ลงทะเบียน PromptPay</p>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Price ID</label>
-                <input type="text" value={settings.payment.stripePriceId} onChange={e => handlePaymentChange('stripePriceId', e.target.value)} className="w-full px-4 py-2 border rounded-lg" />
+            </div>
+
+            {/* Stripe Payment */}
+            <div className="mb-6 p-4 bg-purple-50 rounded-lg">
+              <h4 className="text-lg font-medium mb-3 text-purple-800">💳 Stripe</h4>
+              <div className="space-y-3">
+                <div className="flex items-center mb-3">
+                  <input 
+                    type="checkbox" 
+                    id="stripeEnabled" 
+                    checked={settings.payment.stripeEnabled} 
+                    onChange={e => handlePaymentChange('stripeEnabled', e.target.checked)} 
+                    className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                  />
+                  <label htmlFor="stripeEnabled" className="ml-2 text-sm font-medium text-gray-700">เปิดใช้งาน Stripe</label>
+                </div>
+                
+                {settings.payment.stripeEnabled && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Publishable Key</label>
+                      <input 
+                        type="text" 
+                        value={settings.payment.stripePublishableKey} 
+                        onChange={e => handlePaymentChange('stripePublishableKey', e.target.value)} 
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="pk_test_..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Publishable key จาก Stripe Dashboard</p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Stripe Price ID</label>
+                      <input 
+                        type="text" 
+                        value={settings.payment.stripePriceId} 
+                        onChange={e => handlePaymentChange('stripePriceId', e.target.value)} 
+                        className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500"
+                        placeholder="price_..."
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Price ID สำหรับสินค้าหรือบริการ</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Settings */}
+            <div className="mb-6 p-4 bg-green-50 rounded-lg">
+              <h4 className="text-lg font-medium mb-3 text-green-800">⚙️ การตั้งค่าเพิ่มเติม</h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">วิธีการชำระเงินเริ่มต้น</label>
+                  <select 
+                    value={settings.payment.defaultPaymentMethod} 
+                    onChange={e => handlePaymentChange('defaultPaymentMethod', e.target.value)}
+                    className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="cash">เงินสด</option>
+                    <option value="promptpay">PromptPay</option>
+                    <option value="card">บัตรเครดิต/เดบิต</option>
+                    <option value="transfer">โอนเงิน</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center">
+                  <input 
+                    type="checkbox" 
+                    id="allowMultiplePaymentMethods" 
+                    checked={settings.payment.allowMultiplePaymentMethods} 
+                    onChange={e => handlePaymentChange('allowMultiplePaymentMethods', e.target.checked)} 
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  />
+                  <label htmlFor="allowMultiplePaymentMethods" className="ml-2 text-sm font-medium text-gray-700">อนุญาตให้ชำระเงินหลายวิธี</label>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -424,19 +638,77 @@ const Settings = () => {
         <TabsContent value="categories" className="mt-6">
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl p-6 shadow-sm border">
             <h3 className="text-xl font-semibold mb-4">จัดการหมวดหมู่สินค้า</h3>
-            <div className="flex gap-2 mb-4">
-              <input type="text" value={newCategory} onChange={e => setNewCategory(e.target.value)} placeholder="เพิ่มหมวดหมู่ใหม่" className="flex-grow px-4 py-2 border rounded-lg" />
-              <Button onClick={handleAddCategory}>เพิ่ม</Button>
+            
+            {/* Add Category Form */}
+            <div className="flex gap-2 mb-6">
+              <input 
+                type="text" 
+                value={newCategory} 
+                onChange={e => setNewCategory(e.target.value)} 
+                placeholder="เพิ่มหมวดหมู่ใหม่" 
+                className="flex-grow px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCategory()}
+              />
+              <Button 
+                onClick={handleAddCategory} 
+                disabled={categoriesLoading || !newCategory.trim()}
+                className="px-6"
+              >
+                {categoriesLoading ? 'กำลังเพิ่ม...' : 'เพิ่ม'}
+              </Button>
             </div>
-            <div className="space-y-2">
-              {Array.isArray(settings.categories) ? settings.categories.map(cat => (
-                <div key={cat} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
-                  <span>{cat}</span>
-                  <Button variant="ghost" size="sm" onClick={() => handleRemoveCategory(cat)}>ลบ</Button>
-                </div>
-              )) : (
-                <p className="text-gray-500">ไม่มีหมวดหมู่สินค้า</p>
-              )}
+            
+            {/* Categories List */}
+            {categoriesLoading ? (
+              <div className="flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {categories.length > 0 ? categories.map(category => (
+                  <div key={category.id || category.name} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="w-6 h-6 rounded-full flex items-center justify-center"
+                        style={{ backgroundColor: category.color || '#3B82F6' }}
+                      >
+                        <span className="text-white text-xs">📁</span>
+                      </div>
+                      <div>
+                        <span className="font-medium">{category.name}</span>
+                        {category.description && (
+                          <p className="text-sm text-gray-500">{category.description}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">
+                        สินค้า: {category.product_count || 0}
+                      </span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleRemoveCategory(category.name)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        ลบ
+                      </Button>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <p>ไม่มีหมวดหมู่สินค้า</p>
+                    <p className="text-sm">เริ่มต้นด้วยการเพิ่มหมวดหมู่แรก</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Info */}
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700">
+                💡 <strong>หมายเหตุ:</strong> หมวดหมู่ที่สร้างจะถูกใช้ในระบบสินค้าและรายงาน
+              </p>
             </div>
           </motion.div>
         </TabsContent>

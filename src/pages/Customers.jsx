@@ -46,7 +46,8 @@ const Customers = () => {
       const transformedCustomers = customersData.map(customer => ({
         ...customer,
         loyaltyPoints: customer.loyalty_points || 0,
-        totalPurchases: customer.total_purchases || 0,
+        totalPurchases: customer.total_purchases || 0, // จำนวนครั้ง
+        totalSpent: customer.total_spent || 0, // ยอดเงิน
         lastPurchase: customer.last_purchase,
         joinDate: customer.created_at ? customer.created_at.split('T')[0] : new Date().toISOString().split('T')[0]
       }));
@@ -157,7 +158,7 @@ const Customers = () => {
   };
 
   const totalCustomers = customers.length;
-  const totalRevenue = customers.reduce((sum, c) => sum + (c.totalPurchases || 0), 0);
+  const totalRevenue = customers.reduce((sum, c) => sum + (c.totalSpent || 0), 0);
   const avgPurchase = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
 
   // Show loading state
@@ -269,12 +270,18 @@ const Customers = () => {
             </div>
 
             <div className="mt-4 pt-4 border-t">
-              <div className="flex justify-between items-center mb-2">
+                            <div className="flex justify-between items-center mb-2">
                 <div>
                   <p className="text-sm text-gray-600">ยอดซื้อรวม</p>
-                  <p className="font-semibold text-green-600">฿{(customer.totalPurchases || 0).toLocaleString()}</p>
+                  <p className="font-semibold text-green-600">฿{(customer.totalSpent || 0).toLocaleString()}</p>
                 </div>
                 <div className="text-right">
+                  <p className="text-sm text-gray-600">จำนวนครั้ง</p>
+                  <p className="text-sm font-medium">{customer.totalPurchases || 0} ครั้ง</p>
+                </div>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <div>
                   <p className="text-sm text-gray-600">ซื้อล่าสุด</p>
                   <p className="text-sm font-medium">{customer.lastPurchase ? new Date(customer.lastPurchase).toLocaleDateString('th-TH') : 'ยังไม่มี'}</p>
                 </div>

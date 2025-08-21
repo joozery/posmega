@@ -1,10 +1,19 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Shield, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const ProtectedRoute = ({ children, requiredPermissions = [], fallback = null }) => {
   const { isAuthenticated, hasAllPermissions, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    console.log('🚪 ProtectedRoute.handleLogout - starting logout...');
+    await logout();
+    console.log('🚪 ProtectedRoute.handleLogout - logout completed, reloading page');
+    window.location.reload();
+  };
 
   // ตรวจสอบการเข้าสู่ระบบ
   if (!isAuthenticated) {
@@ -36,7 +45,7 @@ const ProtectedRoute = ({ children, requiredPermissions = [], fallback = null })
             <Button variant="outline" onClick={() => window.history.back()}>
               กลับไปหน้าก่อนหน้า
             </Button>
-            <Button variant="ghost" onClick={logout} className="ml-2">
+            <Button variant="ghost" onClick={handleLogout} className="ml-2">
               <LogOut className="w-4 h-4 mr-2" />
               ออกจากระบบ
             </Button>

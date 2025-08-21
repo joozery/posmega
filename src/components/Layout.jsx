@@ -35,9 +35,11 @@ const Layout = ({ children }) => {
   const { currentUser, logout, hasPermission } = useAuth();
   const { toast } = useToast();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    console.log('🚪 Layout.handleLogout - starting logout...');
+    await logout();
+    console.log('🚪 Layout.handleLogout - logout completed, reloading page');
+    window.location.reload();
   };
 
   useEffect(() => {
@@ -91,6 +93,7 @@ const Layout = ({ children }) => {
     { name: 'แดชบอร์ด', href: '/dashboard', icon: LayoutDashboard, permission: PERMISSIONS.REPORTS_VIEW },
     { name: 'ขายสินค้า', href: '/pos', icon: ShoppingCart, permission: PERMISSIONS.POS_VIEW },
     { name: 'สินค้า', href: '/products', icon: Package, permission: PERMISSIONS.PRODUCTS_VIEW },
+
     { name: 'พิมพ์บาร์โค้ด', href: '/barcodes', icon: QrCode, permission: PERMISSIONS.BARCODES_VIEW },
     { name: 'ลูกค้า', href: '/customers', icon: Users, permission: PERMISSIONS.CUSTOMERS_VIEW },
     { name: 'ประวัติลูกค้า', href: '/customer-history', icon: User, permission: PERMISSIONS.CUSTOMERS_VIEW },

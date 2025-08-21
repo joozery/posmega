@@ -1,18 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Package, PlusCircle, UploadCloud, Trash } from 'lucide-react';
+import { X, Package, UploadCloud, Trash } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import JsBarcode from 'jsbarcode';
 import { showError, showInput } from '@/utils/sweetalert';
 
-const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCategory }) => {
+const ProductDialog = ({ isOpen, onClose, onSave, product, categories }) => {
   const [formData, setFormData] = useState({
     name: '', sku: '', category: '', price: '', cost: '', stock: '', description: '', image: null, originalPrice: '',
     sizes: [], colors: []
   });
   const [newImage, setNewImage] = useState(null); // รูปภาพใหม่ที่เลือก
-  const [newCategory, setNewCategory] = useState('');
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
+
   const [newSize, setNewSize] = useState('');
   const [newColor, setNewColor] = useState('');
   const barcodeRef = useRef(null);
@@ -20,18 +19,19 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
 
   useEffect(() => {
     if (product) {
+      console.log('🔍 ProductDialog - Loading product data:', product);
       setFormData({
         name: product.name || '',
-        sku: product.sku || '',
+        sku: product.sku || product.barcode || '', // แก้ไข: ใช้ barcode ถ้า sku ไม่มี
         category: product.category || (categories[0] || ''),
         price: product.price || '',
         cost: product.cost || '',
         stock: product.stock || '',
         description: product.description || '',
         image: product.image_url || null,
-        originalPrice: product.originalPrice || '',
-        sizes: product.sizes || [],
-        colors: product.colors || []
+        originalPrice: product.original_price || product.originalPrice || '', // แก้ไข: รองรับทั้ง 2 format
+        sizes: Array.isArray(product.sizes) ? product.sizes : (product.sizes ? JSON.parse(product.sizes) : []),
+        colors: Array.isArray(product.colors) ? product.colors : (product.colors ? JSON.parse(product.colors) : [])
       });
     } else {
       setFormData({
@@ -39,12 +39,21 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
         sizes: [], colors: []
       });
     }
-    setIsAddingCategory(false);
-    setNewCategory('');
+
     setNewSize('');
     setNewColor('');
     setNewImage(null); // Reset รูปภาพใหม่
-  }, [product, categories, isOpen]);
+  }, [product, isOpen]); // แก้ไข: ลบ categories ออกจาก dependency
+
+  // useEffect แยกสำหรับ categories เพื่อไม่ให้รีเซ็ตฟอร์ม
+  useEffect(() => {
+    if (!product && categories.length > 0 && !formData.category) {
+      setFormData(prev => ({
+        ...prev,
+        category: categories[0]
+      }));
+    }
+  }, [categories, product, formData.category]);
 
   useEffect(() => {
     if (barcodeRef.current && formData.sku) {
@@ -69,6 +78,11 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     
     if (!formData.sku.trim()) {
       showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอก SKU');
+      return;
+    }
+    
+    if (!formData.category) {
+      showError('ข้อมูลไม่ครบถ้วน', 'กรุณาเลือกหมวดหมู่');
       return;
     }
     
@@ -98,16 +112,7 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
     }
   };
 
-  const handleAddNewCategory = async () => {
-    if (newCategory.trim() !== '') {
-      onAddCategory(newCategory.trim());
-      handleChange('category', newCategory.trim());
-      setIsAddingCategory(false);
-      setNewCategory('');
-    } else {
-      showError('ข้อมูลไม่ครบถ้วน', 'กรุณากรอกชื่อหมวดหมู่');
-    }
-  };
+
 
   const handleAddSize = () => {
     if (newSize.trim() !== '' && !formData.sizes.includes(newSize.trim())) {
@@ -182,16 +187,19 @@ const ProductDialog = ({ isOpen, onClose, onSave, product, categories, onAddCate
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">หมวดหมู่ *</label>
-                      {!isAddingCategory ? (<div className="flex items-center space-x-2">
-                        <select required value={formData.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                          {categories.map((category) => (<option key={category} value={category}>{category}</option>))}
-                        </select>
-                        <Button type="button" variant="outline" size="icon" onClick={() => setIsAddingCategory(true)}><PlusCircle className="w-4 h-4"/></Button>
-                      </div>) : (<div className="flex items-center space-x-2">
-                        <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-lg" placeholder="ชื่อหมวดหมู่ใหม่" autoFocus/>
-                        <Button type="button" onClick={handleAddNewCategory}>เพิ่ม</Button>
-                        <Button type="button" variant="ghost" onClick={() => setIsAddingCategory(false)}>ยกเลิก</Button>
-                      </div>)}
+                      <select required value={formData.category} onChange={(e) => handleChange('category', e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                        <option value="">เลือกหมวดหมู่</option>
+                        {categories.map((category) => (
+                          <option key={category} value={category}>
+                            {category}
+                          </option>
+                        ))}
+                      </select>
+                      {categories.length === 0 && (
+                        <p className="text-sm text-orange-600 mt-1">
+                          ⚠️ ไม่มีหมวดหมู่ กรุณาไปที่ ตั้งค่า → หมวดหมู่ เพื่อเพิ่มหมวดหมู่ใหม่
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">

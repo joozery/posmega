@@ -20,7 +20,7 @@ import { useAuth, PERMISSIONS } from '@/hooks/useAuth';
 import Papa from 'papaparse';
 import { salesService } from '@/services/salesService';
 import ReceiptDialog from '@/components/ReceiptDialog';
-import TaxInvoiceDialog from '@/components/TaxInvoiceDialog';
+
 
 const RefundHistory = () => {
   const { toast } = useToast();
@@ -34,6 +34,7 @@ const RefundHistory = () => {
   const [isRefundDialogOpen, setIsRefundDialogOpen] = useState(false);
   const [isReceiptDialogOpen, setIsReceiptDialogOpen] = useState(false);
   const [isTaxInvoiceDialogOpen, setIsTaxInvoiceDialogOpen] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -528,13 +529,15 @@ const RefundHistory = () => {
         isOpen={isReceiptDialogOpen} 
         onClose={() => setIsReceiptDialogOpen(false)} 
         sale={selectedSale} 
+        type="receipt"
       />
 
       {/* Tax Invoice Dialog */}
-      <TaxInvoiceDialog 
+      <ReceiptDialog 
         isOpen={isTaxInvoiceDialogOpen} 
         onClose={() => setIsTaxInvoiceDialogOpen(false)} 
         sale={selectedSale} 
+        type="tax-invoice"
       />
     </div>
   );

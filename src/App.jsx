@@ -34,9 +34,14 @@ const getStripePromise = () => {
 
 function App() {
   const [stripePromise, setStripePromise] = useState(getStripePromise());
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, currentUser, loading } = useAuth();
   
-  console.log('App render - isAuthenticated:', isAuthenticated);
+  console.log('🔄 App render:', { 
+    isAuthenticated, 
+    currentUser: currentUser?.name || null, 
+    loading,
+    path: window.location.pathname 
+  });
 
   useEffect(() => {
     const handleSettingsChange = () => {
@@ -61,7 +66,14 @@ function App() {
       </Helmet>
       <Router>
         <Elements stripe={stripePromise}>
-          {!isAuthenticated ? (
+          {loading ? (
+            <div className="min-h-screen flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                <p className="text-gray-600">กำลังโหลด...</p>
+              </div>
+            </div>
+          ) : !isAuthenticated ? (
             <>
               <Helmet>
                 <title>เข้าสู่ระบบ - Universal POS</title>
@@ -72,8 +84,8 @@ function App() {
           ) : (
             <Layout>
               <Routes>
-                <Route path="/" element={<Navigate to="/pos" replace />} />
-                <Route path="/login" element={<Navigate to="/pos" replace />} />
+                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                <Route path="/login" element={<Navigate to="/dashboard" replace />} />
                 
                 <Route path="/dashboard" element={
                   <ProtectedRoute requiredPermissions={[PERMISSIONS.REPORTS_VIEW]}>

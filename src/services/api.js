@@ -3,7 +3,7 @@ import axios from 'axios';
 // Create axios instance with base configuration
 const api = axios.create({
   baseURL: 'https://posmega-backend-786f2703830d.herokuapp.com/api',
-  timeout: 10000,
+  timeout: 30000, // เพิ่ม timeout เป็น 30 วินาที สำหรับ Heroku
   headers: {
     'Content-Type': 'application/json',
   },

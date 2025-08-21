@@ -12,6 +12,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
     const [loyaltySettings, setLoyaltySettings] = useState({ purchaseAmountForOnePoint: 100, onePointValueInBaht: 1 });
     const [pointsToUse, setPointsToUse] = useState('');
     const [discount, setDiscount] = useState(0);
+    const [excludeVAT, setExcludeVAT] = useState(false);
 
     useEffect(() => {
         const savedSettings = localStorage.getItem('pos_settings');
@@ -26,13 +27,14 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
     useEffect(() => {
         setPointsToUse('');
         setDiscount(0);
+        setExcludeVAT(false);
     }, [selectedCustomer, cart]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const taxRateData = JSON.parse(localStorage.getItem('pos_settings') || '{}')?.system?.taxRate;
     const taxRate = parseFloat(taxRateData || 7) / 100;
     const totalAfterDiscount = subtotal - discount;
-    const tax = totalAfterDiscount * taxRate;
+    const tax = excludeVAT ? 0 : totalAfterDiscount * taxRate;
     const total = totalAfterDiscount + tax;
 
     const handleApplyPoints = () => {
@@ -63,7 +65,8 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
     const handleConfirmPayment = async (paymentMethod) => {
         const discountInfo = {
             pointsUsed: discount > 0 ? parseInt(pointsToUse) : 0,
-            discountAmount: discount
+            discountAmount: discount,
+            excludeVAT: excludeVAT
         };
         const saleData = await onProcessSale(paymentMethod, discountInfo);
         if (saleData) {
@@ -128,6 +131,23 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                             <div className="flex-1">
                                 <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
                                 <p className="text-xs text-gray-500">฿{item.price.toLocaleString()}</p>
+                                
+                                {/* แสดงข้อมูล size และ color */}
+                                {(item.sizes?.length > 0 || item.colors?.length > 0) && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                        {item.sizes?.map((size, index) => (
+                                            <span key={index} className="inline-block bg-blue-100 text-blue-800 text-xs px-1.5 py-0.5 rounded">
+                                                {size}
+                                            </span>
+                                        ))}
+                                        {item.colors?.map((color, index) => (
+                                            <span key={index} className="inline-block bg-green-100 text-green-800 text-xs px-1.5 py-0.5 rounded">
+                                                {color}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                
                                 <div className="flex items-center mt-1">
                                     <Input type="number" value={item.quantity} onChange={(e) => onUpdateQuantity(item.id, parseInt(e.target.value))} className="w-16 h-8 text-center" />
                                 </div>
@@ -138,6 +158,32 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                             </div>
                         </div>
                     ))
+                )}
+            </div>
+
+            {/* VAT Options */}
+            <div className="p-4 border-t bg-gray-50">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">ตัวเลือกภาษี</span>
+                    </div>
+                </div>
+                <div className="mt-2 flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        id="excludeVAT"
+                        checked={excludeVAT}
+                        onChange={(e) => setExcludeVAT(e.target.checked)}
+                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                    />
+                    <label htmlFor="excludeVAT" className="text-sm text-gray-700">
+                        ไม่รวม VAT (ภาษีมูลค่าเพิ่ม)
+                    </label>
+                </div>
+                {excludeVAT && (
+                    <p className="text-xs text-orange-600 mt-1">
+                        ⚠️ การขายจะไม่รวม VAT 7% (สำหรับลูกค้าที่ไม่ต้องการใบกำกับภาษี)
+                    </p>
                 )}
             </div>
 
@@ -170,8 +216,18 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
             <div className="p-4 mt-auto border-t space-y-2">
                 <div className="flex justify-between text-sm"><span className="text-gray-600">ยอดรวม</span><span className="font-medium">฿{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
                 {discount > 0 && <div className="flex justify-between text-sm text-green-600"><span className="text-gray-600">ส่วนลด</span><span className="font-medium">-฿{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
-                <div className="flex justify-between text-sm"><span className="text-gray-600">ภาษี ({taxRate * 100}%)</span><span className="font-medium">฿{tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                <div className="flex justify-between text-xl font-bold"><span className="text-gray-900">ยอดสุทธิ</span><span className="text-blue-600">฿{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
+                <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">
+                        ภาษี {excludeVAT ? '(ไม่รวม)' : `(${taxRate * 100}%)`}
+                    </span>
+                    <span className={`font-medium ${excludeVAT ? 'text-orange-600' : ''}`}>
+                        {excludeVAT ? '฿0.00' : `฿${tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                    </span>
+                </div>
+                <div className="flex justify-between text-xl font-bold">
+                    <span className="text-gray-900">ยอดสุทธิ</span>
+                    <span className="text-blue-600">฿{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
                 <Button size="lg" className="w-full mt-2" onClick={() => setIsPaymentDialogOpen(true)} disabled={cart.length === 0}>
                     <Tag className="w-5 h-5 mr-2" />ชำระเงิน
                 </Button>

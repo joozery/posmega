@@ -253,6 +253,9 @@ const POS = () => {
         {console.log('POS render - lastSale items:', lastSale?.items)}
         {console.log('POS render - lastSale total:', lastSale?.total)}
         {console.log('POS render - lastSale subtotal:', lastSale?.subtotal)}
+        {console.log('POS render - lastSale created_by_name:', lastSale?.created_by_name)}
+        {console.log('POS render - lastSale created_by:', lastSale?.created_by)}
+        {console.log('POS render - ReceiptDialog isOpen:', !!lastSale)}
     </div>
   );
 };

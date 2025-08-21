@@ -133,10 +133,12 @@ export const productService = {
   // Get product categories
   async getProductCategories() {
     try {
+      console.log('📂 productService.getProductCategories - calling API...');
       const response = await api.get('/products/categories/list');
+      console.log('✅ productService.getProductCategories - response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Error fetching product categories:', error);
+      console.error('❌ Error fetching product categories:', error);
       throw error;
     }
   },

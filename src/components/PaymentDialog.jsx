@@ -6,26 +6,103 @@ import { useToast } from '@/components/ui/use-toast';
 import { useStripe } from '@stripe/react-stripe-js';
 import { toDataURL } from 'qrcode';
 import promptpayPayload from 'promptpay-qr';
+import { settingsService } from '@/services/settingsService';
 
 const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, discount }) => {
   const { toast } = useToast();
   const stripe = useStripe();
   const [view, setView] = useState('options'); // 'options', 'promptpay', 'stripe_loading'
   const [promptPayQR, setPromptPayQR] = useState('');
-  const [settings, setSettings] = useState({});
+  const [settings, setSettings] = useState({
+    payment: {
+      cashEnabled: 'true',
+      stripeEnabled: 'false',
+      promptpayEnabled: 'false',
+      defaultPaymentMethod: 'cash',
+      promptpayId: '',
+      stripePriceId: ''
+    }
+  });
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
-      const savedSettings = JSON.parse(localStorage.getItem('pos_settings') || '{}');
-      setSettings(savedSettings);
+      // ตรวจสอบ localStorage ก่อน
+      const savedSettings = localStorage.getItem('pos_settings');
+      if (savedSettings) {
+        try {
+          const parsed = JSON.parse(savedSettings);
+          if (parsed.payment) {
+            console.log('📱 PaymentDialog - Found settings in localStorage:', parsed);
+            setSettings(parsed);
+          }
+        } catch (e) {
+          console.error('❌ PaymentDialog - Error parsing localStorage settings:', e);
+        }
+      }
+      
+      // โหลดจาก API
+      loadSettings();
       setView('options');
       setPromptPayQR('');
     }
   }, [isOpen]);
 
+  const loadSettings = async () => {
+    try {
+      setLoading(true);
+      console.log('🔄 PaymentDialog - Loading payment settings from API...');
+      
+      const response = await settingsService.getAllSettings();
+      console.log('📥 PaymentDialog - API response:', response);
+      
+      if (!response) {
+        throw new Error('No response from settings API');
+      }
+      
+      const apiSettings = response.settings || {};
+      console.log('🔧 PaymentDialog - Settings from API:', apiSettings);
+      console.log('💳 PaymentDialog - Payment settings:', apiSettings.payment);
+      
+      // ตรวจสอบว่ามีข้อมูล payment หรือไม่
+      if (apiSettings.payment && Object.keys(apiSettings.payment).length > 0) {
+        console.log('✅ PaymentDialog - Using API settings');
+        setSettings(apiSettings);
+      } else {
+        console.log('⚠️ PaymentDialog - No payment settings from API, using fallback');
+        const savedSettings = JSON.parse(localStorage.getItem('pos_settings') || '{}');
+        console.log('📱 PaymentDialog - Fallback settings:', savedSettings);
+        
+        // ถ้า localStorage ไม่มีข้อมูล payment ให้ใช้ default
+        if (!savedSettings.payment) {
+          savedSettings.payment = {
+            cashEnabled: 'true',
+            stripeEnabled: 'false',
+            promptpayEnabled: 'false',
+            defaultPaymentMethod: 'cash',
+            promptpayId: '',
+            stripePriceId: ''
+          };
+        }
+        
+        setSettings(savedSettings);
+      }
+      
+    } catch (error) {
+      console.error('❌ PaymentDialog - Error loading payment settings:', error);
+      // Fallback to localStorage if API fails
+      const savedSettings = JSON.parse(localStorage.getItem('pos_settings') || '{}');
+      console.log('📱 PaymentDialog - Using fallback settings due to error:', savedSettings);
+      setSettings(savedSettings);
+    } finally {
+      setLoading(false);
+      console.log('✅ PaymentDialog - Settings loading completed');
+    }
+  };
+
   const handleGeneratePromptPayQR = useCallback(async () => {
     const promptpayId = settings?.payment?.promptpayId;
-    if (!promptpayId) {
+    if (!promptpayId || promptpayId.trim() === '') {
       toast({ title: 'ไม่ได้ตั้งค่า PromptPay', description: 'กรุณาตั้งค่าเบอร์ PromptPay ในหน้าตั้งค่าก่อน', variant: 'destructive' });
       return;
     }
@@ -46,7 +123,7 @@ const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, disc
       return;
     }
     const priceId = settings?.payment?.stripePriceId;
-    if (!priceId) {
+    if (!priceId || priceId.trim() === '') {
       toast({ title: "Stripe Price ID หายไป", description: "กรุณาตั้งค่า Price ID ในหน้าตั้งค่าก่อน", variant: "destructive" });
       return;
     }
@@ -120,27 +197,105 @@ const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, disc
       default:
         return (
           <div className="p-6 space-y-4">
-             <Button size="lg" variant="outline" className="w-full flex justify-start items-center p-6" onClick={handleCashPayment}>
-              <DollarSign className="w-6 h-6 mr-4" />
-               <div>
-                <p className="font-semibold text-left">เงินสด</p>
-                <p className="font-normal text-sm text-left">รับชำระด้วยเงินสด</p>
+            {loading ? (
+              <div className="text-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                <p className="text-sm text-gray-500">กำลังโหลดช่องทางชำระเงิน...</p>
               </div>
-            </Button>
-            <Button size="lg" className="w-full flex justify-start items-center p-6" onClick={handleStripeCheckout} disabled={!stripe}>
-              <CreditCard className="w-6 h-6 mr-4" />
-              <div>
-                <p className="font-semibold text-left">บัตรเครดิต (Stripe)</p>
-                <p className="font-normal text-sm text-left">รับชำระผ่านบัตรเครดิตและเดบิต</p>
+            ) : !settings || !settings.payment ? (
+              <div className="text-center py-8 text-red-600">
+                <p className="font-medium">⚠️ ไม่สามารถโหลดการตั้งค่าการชำระเงินได้</p>
+                <p className="text-sm mt-1">กรุณาลองใหม่อีกครั้ง</p>
+                <Button 
+                  variant="outline" 
+                  className="mt-3" 
+                  onClick={loadSettings}
+                >
+                  ลองใหม่
+                </Button>
               </div>
-            </Button>
-            <Button size="lg" variant="outline" className="w-full flex justify-start items-center p-6" onClick={handleGeneratePromptPayQR}>
-              <QrCode className="w-6 h-6 mr-4" />
-               <div>
-                <p className="font-semibold text-left">พร้อมเพย์ QR Code</p>
-                <p className="font-normal text-sm text-left">สร้าง QR Code สำหรับให้ลูกค้าสแกนจ่าย</p>
-              </div>
-            </Button>
+            ) : (
+              <>
+                {/* เงินสด */}
+                {(settings.payment?.cashEnabled === 'true' || settings.payment?.cashEnabled === '1') && (
+                  <Button 
+                    size="lg" 
+                    variant={(settings.payment?.defaultPaymentMethod === 'cash' || settings.payment?.defaultPaymentMethod === '1') ? "default" : "outline"} 
+                    className="w-full flex justify-start items-center p-6" 
+                    onClick={handleCashPayment}
+                  >
+                    <DollarSign className="w-6 h-6 mr-4" />
+                    <div>
+                      <p className="font-semibold text-left">เงินสด</p>
+                      <p className="font-normal text-sm text-left">รับชำระด้วยเงินสด</p>
+                    </div>
+                  </Button>
+                )}
+
+                {/* บัตรเครดิต (Stripe) */}
+                {(settings.payment?.stripeEnabled === 'true' || settings.payment?.stripeEnabled === '1') && (
+                  <Button 
+                    size="lg" 
+                    variant={(settings.payment?.defaultPaymentMethod === 'stripe' || settings.payment?.defaultPaymentMethod === '2') ? "default" : "outline"} 
+                    className="w-full flex justify-start items-center p-6" 
+                    onClick={handleStripeCheckout} 
+                    disabled={!stripe}
+                  >
+                    <CreditCard className="w-6 h-6 mr-4" />
+                    <div>
+                      <p className="font-semibold text-left">บัตรเครดิต (Stripe)</p>
+                      <p className="font-normal text-sm text-left">รับชำระผ่านบัตรเครดิตและเดบิต</p>
+                    </div>
+                  </Button>
+                )}
+
+                {/* แสดงข้อความเมื่อ Stripe เปิดใช้งานแต่ไม่ได้ตั้งค่า Price ID */}
+                {(settings.payment?.stripeEnabled === 'true' || settings.payment?.stripeEnabled === '1') && (!settings.payment?.stripePriceId || settings.payment?.stripePriceId.trim() === '') && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm text-orange-700">
+                      ⚠️ Stripe เปิดใช้งานแล้ว แต่ยังไม่ได้ตั้งค่า Price ID
+                    </p>
+                  </div>
+                )}
+
+                {/* PromptPay */}
+                {(settings.payment?.promptpayEnabled === 'true' || settings.payment?.promptpayEnabled === '1') && (
+                  <Button 
+                    size="lg" 
+                    variant={(settings.payment?.defaultPaymentMethod === 'promptpay' || settings.payment?.defaultPaymentMethod === '3') ? "default" : "outline"} 
+                    className="w-full flex justify-start items-center p-6" 
+                    onClick={handleGeneratePromptPayQR}
+                  >
+                    <QrCode className="w-6 h-6 mr-4" />
+                    <div>
+                      <p className="font-semibold text-left">พร้อมเพย์ QR Code</p>
+                      <p className="font-normal text-sm text-left">สร้าง QR Code สำหรับให้ลูกค้าสแกนจ่าย</p>
+                    </div>
+                  </Button>
+                )}
+
+                {/* แสดงข้อความเมื่อ PromptPay เปิดใช้งานแต่ไม่ได้ตั้งค่า ID */}
+                {(settings.payment?.promptpayEnabled === 'true' || settings.payment?.promptpayEnabled === '1') && (!settings.payment?.promptpayId || settings.payment?.promptpayId.trim() === '') && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm text-orange-700">
+                      ⚠️ PromptPay เปิดใช้งานแล้ว แต่ยังไม่ได้ตั้งค่าเบอร์ PromptPay
+                    </p>
+                  </div>
+                )}
+
+                {/* แสดงข้อความเมื่อไม่มีช่องทางชำระเงิน */}
+                {(!settings.payment?.cashEnabled || (settings.payment?.cashEnabled !== 'true' && settings.payment?.cashEnabled !== '1')) &&
+                 (!settings.payment?.stripeEnabled || (settings.payment?.stripeEnabled !== 'true' && settings.payment?.stripeEnabled !== '1')) &&
+                 (!settings.payment?.promptpayEnabled || (settings.payment?.promptpayEnabled !== 'true' && settings.payment?.promptpayEnabled !== '1')) && (
+                  <div className="text-center py-8 text-orange-600">
+                    <p className="font-medium">⚠️ ไม่มีช่องทางชำระเงินที่เปิดใช้งาน</p>
+                    <p className="text-sm mt-1">กรุณาตั้งค่าช่องทางชำระเงินในหน้าตั้งค่า</p>
+                  </div>
+                )}
+
+
+              </>
+            )}
           </div>
         );
     }

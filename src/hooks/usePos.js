@@ -59,12 +59,27 @@ export const usePos = () => {
             
             // Load settings
             try {
-                const settingsResponse = await settingsService.getSettings();
+                const settingsResponse = await settingsService.getAllSettings();
                 const settings = settingsResponse.settings || {};
-                setCategories(settings.categories || ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']);
+                console.log('✅ usePos - settings loaded:', settings);
+                
+                // ใช้ categories จาก settings หรือ fallback
+                const categoriesFromSettings = settings.categories || [];
+                if (Array.isArray(categoriesFromSettings) && categoriesFromSettings.length > 0) {
+                    setCategories(categoriesFromSettings);
+                    console.log('✅ usePos - categories from settings:', categoriesFromSettings);
+                } else {
+                    // Fallback categories
+                    const fallbackCategories = ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ'];
+                    setCategories(fallbackCategories);
+                    console.log('⚠️ usePos - using fallback categories:', fallbackCategories);
+                }
             } catch (error) {
-                console.error('Error loading settings:', error);
-                setCategories(['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']);
+                console.error('❌ Error loading settings:', error);
+                // Fallback categories
+                const fallbackCategories = ['เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ'];
+                setCategories(fallbackCategories);
+                console.log('⚠️ usePos - using fallback categories due to error:', fallbackCategories);
             }
             
             closeLoading();
@@ -104,7 +119,17 @@ export const usePos = () => {
                     return prevCart || [];
                 }
             } else {
-                return [...(prevCart || []), { ...product, quantity: 1 }];
+                const newItem = { ...product, quantity: 1 };
+                console.log('Adding new item to cart:', {
+                    id: newItem.id,
+                    name: newItem.name,
+                    sizes: newItem.sizes,
+                    colors: newItem.colors,
+                    sku: newItem.sku,
+                    category: newItem.category,
+                    barcode: newItem.barcode
+                });
+                return [...(prevCart || []), newItem];
             }
         });
     }, [toast, hasPermission]);
@@ -133,7 +158,7 @@ export const usePos = () => {
         );
     }, [products, toast, removeFromCart]);
 
-    const processSale = useCallback(async (paymentMethod, discountInfo = { pointsUsed: 0, discountAmount: 0 }) => {
+    const processSale = useCallback(async (paymentMethod, discountInfo = { pointsUsed: 0, discountAmount: 0, excludeVAT: false }) => {
         if (!hasPermission(PERMISSIONS.POS_PROCESS_SALE)) {
             toast({ title: "ไม่มีสิทธิ์", description: "คุณไม่มีสิทธิ์ในการประมวลผลการขาย", variant: "destructive" });
             return null;
@@ -147,10 +172,11 @@ export const usePos = () => {
             // Get settings
             let settings = {};
             try {
-                const settingsResponse = await settingsService.getSettings();
+                const settingsResponse = await settingsService.getAllSettings();
                 settings = settingsResponse.settings || {};
+                console.log('✅ usePos.processSale - settings loaded:', settings);
             } catch (error) {
-                console.error('Error loading settings:', error);
+                console.error('❌ Error loading settings in processSale:', error);
                 settings = {};
             }
             
@@ -159,7 +185,7 @@ export const usePos = () => {
 
             const subtotal = (cart || []).reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);
             const totalAfterDiscount = subtotal - discountInfo.discountAmount;
-            const tax = totalAfterDiscount * taxRate;
+            const tax = discountInfo.excludeVAT ? 0 : totalAfterDiscount * taxRate;
             const total = totalAfterDiscount + tax;
 
             let pointsEarned = 0;
@@ -170,19 +196,46 @@ export const usePos = () => {
                 customerId: selectedCustomer ? selectedCustomer.id : null,
                 items: (cart || []).map(item => {
                     console.log('Creating sale item from cart item:', item);
-                    return {
+                    
+                    // ข้อมูล sizes และ colors เป็น object/array อยู่แล้ว ไม่ต้อง parse
+                    let sizes = item.sizes || [];
+                    let colors = item.colors || [];
+                    
+                    // แปลงเป็น array ถ้าเป็น object
+                    if (typeof sizes === 'object' && !Array.isArray(sizes)) {
+                        sizes = Object.values(sizes);
+                    }
+                    if (typeof colors === 'object' && !Array.isArray(colors)) {
+                        colors = Object.values(colors);
+                    }
+                    
+                    console.log('Original sizes:', item.sizes, 'Processed sizes:', sizes);
+                    console.log('Original colors:', item.colors, 'Processed colors:', colors);
+                    
+                    const saleItem = {
                         productId: item.id,
+                        product_name: item.name,
+                        name: item.name,
                         quantity: item.quantity || 0,
                         price: item.price || 0,
-                        total: (item.price || 0) * (item.quantity || 0)
+                        total: (item.price || 0) * (item.quantity || 0),
+                        // เพิ่มข้อมูลรายละเอียดสินค้า
+                        sizes: sizes,
+                        colors: colors,
+                        sku: item.barcode || '',
+                        category: item.category || ''
                     };
+                    
+                    console.log('Created sale item:', saleItem);
+                    return saleItem;
                 }),
                 subtotal,
                 discount: discountInfo.discountAmount,
                 tax,
                 total,
+                excludeVAT: discountInfo.excludeVAT,
                 paymentMethod,
-                notes: '',
+                notes: discountInfo.excludeVAT ? 'ไม่รวม VAT' : '',
                 pointsUsed: discountInfo.pointsUsed,
                 pointsEarned: loyaltySettings.purchaseAmountForOnePoint > 0 
                     ? Math.floor(total / loyaltySettings.purchaseAmountForOnePoint) 
@@ -191,6 +244,18 @@ export const usePos = () => {
 
             console.log('Sending sale data:', saleData);
             console.log('Cart items:', cart);
+            console.log('Cart items details:');
+            cart.forEach((item, index) => {
+                console.log(`Cart item ${index}:`, {
+                    id: item.id,
+                    name: item.name,
+                    sizes: item.sizes,
+                    colors: item.colors,
+                    sku: item.sku,
+                    category: item.category,
+                    barcode: item.barcode
+                });
+            });
             console.log('Sale data items:', saleData.items);
             console.log('Auth token:', localStorage.getItem('auth_token'));
 
@@ -294,6 +359,22 @@ export const usePos = () => {
                     console.log('Creating items from cart because items are missing or empty');
                     finalSale.items = (cart || []).map(item => {
                         console.log('Creating final sale item from cart item:', item);
+                        
+                        // ข้อมูล sizes และ colors เป็น object/array อยู่แล้ว ไม่ต้อง parse
+                        let sizes = item.sizes || [];
+                        let colors = item.colors || [];
+                        
+                        // แปลงเป็น array ถ้าเป็น object
+                        if (typeof sizes === 'object' && !Array.isArray(sizes)) {
+                            sizes = Object.values(sizes);
+                        }
+                        if (typeof colors === 'object' && !Array.isArray(colors)) {
+                            colors = Object.values(colors);
+                        }
+                        
+                        console.log('Final sale item - Original sizes:', item.sizes, 'Processed sizes:', sizes);
+                        console.log('Final sale item - Original colors:', item.colors, 'Processed colors:', colors);
+                        
                         return {
                             id: item.id,
                             product_id: item.id,
@@ -301,13 +382,21 @@ export const usePos = () => {
                             name: item.name,
                             quantity: item.quantity || 0,
                             price: item.price || 0,
-                            total: (item.price || 0) * (item.quantity || 0)
+                            total: (item.price || 0) * (item.quantity || 0),
+                            // เพิ่มข้อมูลรายละเอียดสินค้า
+                            sizes: sizes,
+                            colors: colors,
+                            sku: item.sku || item.barcode || '',
+                            category: item.category || ''
                         };
                     });
                 }
                 
                 console.log('Final sale items:', finalSale.items);
                 console.log('Final sale items length:', finalSale.items?.length);
+                console.log('Final sale created_by_name:', finalSale.created_by_name);
+                console.log('Final sale created_by:', finalSale.created_by);
+                console.log('Final sale keys:', Object.keys(finalSale));
                 
                 return finalSale;
                 

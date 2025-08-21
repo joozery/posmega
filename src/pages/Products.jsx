@@ -18,13 +18,13 @@ import ProductDialog from '@/components/ProductDialog';
 import { usePos } from '@/hooks/usePos';
 import { useNavigate } from 'react-router-dom';
 import { productService } from '@/services/productService';
+import { categoriesService } from '@/services/categoriesService';
 import { 
   showSuccess, 
   showError, 
   showDeleteConfirm, 
   showLoading, 
   closeLoading,
-  showSuccessToast,
   showErrorToast
 } from '@/utils/sweetalert';
 
@@ -33,6 +33,7 @@ const Products = () => {
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ทั้งหมด');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -53,10 +54,6 @@ const Products = () => {
       const productsArray = response.products || [];
       setProducts(productsArray);
       
-      // Extract unique categories from products
-      const uniqueCategories = [...new Set(productsArray.map(p => p.category).filter(Boolean))];
-      setCategories(uniqueCategories);
-      
       closeLoading();
     } catch (error) {
       console.error('Error loading products:', error);
@@ -68,8 +65,31 @@ const Products = () => {
     }
   };
 
+  // Load categories from API
+  const loadCategories = async () => {
+    try {
+      setCategoriesLoading(true);
+      console.log('📂 Loading categories from Categories API...');
+      const response = await categoriesService.getAllCategories(true); // active only
+      const categoriesArray = response.categories || [];
+      console.log('✅ Categories loaded:', categoriesArray);
+      
+      // แปลงเป็น array ของชื่อหมวดหมู่สำหรับ backward compatibility
+      const categoryNames = categoriesArray.map(cat => cat.name);
+      setCategories(categoryNames);
+    } catch (error) {
+      console.error('❌ Error loading categories:', error);
+      // Fallback: ใช้ array ว่าง
+      setCategories([]);
+      console.log('⚠️ Using empty categories array');
+    } finally {
+      setCategoriesLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadProducts();
+    loadCategories();
   }, []);
 
   const filteredProducts = products.filter(product => {
@@ -79,13 +99,7 @@ const Products = () => {
     return matchesSearch && matchesCategory;
   });
 
-  const handleAddCategory = (newCategory) => {
-      if (!categories.includes(newCategory)) {
-          const updated = [...categories, newCategory];
-          setCategories(updated);
-          showSuccessToast(`หมวดหมู่ "${newCategory}" ถูกเพิ่มแล้ว`);
-      }
-  }
+
 
   const saveProduct = async (productData) => {
     try {
@@ -101,8 +115,9 @@ const Products = () => {
         showSuccess('เพิ่มสินค้าสำเร็จ', `${productData.name} ถูกเพิ่มแล้ว`);
       }
       
-      // Reload products to get updated data
+      // Reload products and categories to get updated data
       await loadProducts();
+      await loadCategories();
       setIsDialogOpen(false);
       setEditingProduct(null);
     } catch (error) {
@@ -130,6 +145,7 @@ const Products = () => {
   };
 
   const editProduct = (product) => {
+    console.log('🔧 Products.editProduct - product data:', product);
     setEditingProduct(product);
     setIsDialogOpen(true);
   };
@@ -200,8 +216,16 @@ const Products = () => {
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <Filter className="w-8 h-8 text-purple-600 mb-3" />
-          <h3 className="text-2xl font-bold text-gray-900">{categories.length}</h3>
-          <p className="text-gray-600 text-sm mt-1">หมวดหมู่</p>
+          <h3 className="text-2xl font-bold text-gray-900">
+            {categoriesLoading ? (
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto"></div>
+            ) : (
+              categories.length
+            )}
+          </h3>
+          <p className="text-gray-600 text-sm mt-1">
+            {categoriesLoading ? 'กำลังโหลด...' : 'หมวดหมู่'}
+          </p>
         </motion.div>
       </div>
 
@@ -212,9 +236,35 @@ const Products = () => {
             <input type="text" placeholder="ค้นหาสินค้าหรือ SKU..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
           </div>
           <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {['ทั้งหมด', ...categories].map((category) => (
-              <Button key={category} variant={selectedCategory === category ? "default" : "outline"} onClick={() => setSelectedCategory(category)} className="whitespace-nowrap">{category}</Button>
-            ))}
+            <Button 
+              variant={selectedCategory === 'ทั้งหมด' ? "default" : "outline"} 
+              onClick={() => setSelectedCategory('ทั้งหมด')} 
+              className="whitespace-nowrap"
+            >
+              ทั้งหมด
+            </Button>
+            
+            {categoriesLoading ? (
+              <div className="flex items-center gap-2 px-3 py-2 text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                กำลังโหลดหมวดหมู่...
+              </div>
+            ) : categories.length > 0 ? (
+              categories.map((category) => (
+                <Button 
+                  key={category} 
+                  variant={selectedCategory === category ? "default" : "outline"} 
+                  onClick={() => setSelectedCategory(category)} 
+                  className="whitespace-nowrap"
+                >
+                  {category}
+                </Button>
+              ))
+            ) : (
+              <div className="px-3 py-2 text-sm text-orange-600">
+                ไม่มีหมวดหมู่
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -329,7 +379,6 @@ const Products = () => {
         onSave={saveProduct} 
         product={editingProduct} 
         categories={categories}
-        onAddCategory={handleAddCategory}
       />
     </div>
   );
