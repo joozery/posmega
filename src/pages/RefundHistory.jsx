@@ -250,6 +250,7 @@ const RefundHistory = () => {
       'Tax': sale.tax.toFixed(2),
       'Total': sale.total.toFixed(2),
       'Payment Method': sale.paymentMethod,
+      'Status': sale.status || 'completed',
       'Points Used': sale.pointsUsed || 0,
       'Points Earned': sale.pointsEarned || 0
     }));
@@ -457,6 +458,9 @@ const RefundHistory = () => {
                   วันที่
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  สถานะ
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   การดำเนินการ
                 </th>
               </tr>
@@ -496,6 +500,15 @@ const RefundHistory = () => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {sale.created_at ? new Date(sale.created_at).toLocaleString('th-TH') : 'ไม่ระบุวันที่'}
                   </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      (sale.status || 'completed') === 'refunded' 
+                        ? 'bg-red-100 text-red-800' 
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {(sale.status || 'completed') === 'refunded' ? 'คืนเงินแล้ว' : 'สำเร็จ'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">
                       <Button
@@ -526,6 +539,8 @@ const RefundHistory = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleRefund(sale)}
+                          disabled={(sale.status || 'completed') === 'refunded'}
+                          title={(sale.status || 'completed') === 'refunded' ? 'รายการนี้ถูกคืนเงินแล้ว' : ''}
                           className="text-red-600 hover:text-red-800"
                         >
                           <RotateCcw className="w-4 h-4" />

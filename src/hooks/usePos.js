@@ -261,7 +261,7 @@ export const usePos = () => {
 
             // Save sale to API
             try {
-                const saleResponse = await fetch('https://posmega-backend-786f2703830d.herokuapp.com/api/sales', {
+                const saleResponse = await fetch('https://rocky-crag-70324-8ba51ccad186.herokuapp.com/api/sales', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

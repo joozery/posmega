@@ -130,7 +130,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                             </div>
                             <div className="flex-1">
                                 <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
-                                <p className="text-xs text-gray-500">฿{item.price.toLocaleString()}</p>
+                                <p className="text-xs text-gray-500">฿{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 
                                 {/* แสดงข้อมูล size และ color */}
                                 {(item.sizes?.length > 0 || item.colors?.length > 0) && (
@@ -153,7 +153,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="font-bold">฿{(item.price * item.quantity).toLocaleString()}</p>
+                                <p className="font-bold">฿{(item.price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                 <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-500 hover:text-red-600" onClick={() => onRemoveFromCart(item.id)}><Trash2 className="w-4 h-4" /></Button>
                             </div>
                         </div>
@@ -207,7 +207,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                                 <Ticket className="w-5 h-5" />
                                 <span className="font-semibold">ใช้ {pointsToUse} แต้มเป็นส่วนลด</span>
                             </div>
-                            <span className="font-bold text-green-800">-฿{discount.toLocaleString()}</span>
+                            <span className="font-bold text-green-800">-฿{discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
                     )}
                 </div>
