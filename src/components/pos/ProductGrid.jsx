@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Package } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 const ProductCard = ({ product, onAddToCart }) => (
     <motion.div
@@ -35,7 +36,7 @@ const ProductCard = ({ product, onAddToCart }) => (
         </div>
         <h3 className="font-semibold text-gray-800 text-sm mb-1 line-clamp-2 flex-grow">{product.name}</h3>
         <div className="flex items-end justify-between mt-2">
-            <p className="text-base sm:text-lg font-bold text-blue-600">฿{product.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-base sm:text-lg font-bold text-blue-600">{formatCurrency(product.price)}</p>
             <p className="text-xs text-gray-500">เหลือ {product.stock}</p>
         </div>
     </motion.div>

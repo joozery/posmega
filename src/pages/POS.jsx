@@ -8,9 +8,10 @@ import CartPanel from '@/components/pos/CartPanel';
 import CustomerDialog from '@/components/CustomerDialog';
 import ReceiptDialog from '@/components/ReceiptDialog';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Shield } from 'lucide-react';
+import { ShoppingCart, Shield, UserPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { showSuccessToast, showErrorToast } from '@/utils/sweetalert';
+import { categoriesService } from '@/services/categoriesService';
 
 const POS = () => {
   const { toast } = useToast();
@@ -37,7 +38,37 @@ const POS = () => {
   const [isCustomerDialogOpen, setIsCustomerDialogOpen] = useState(false);
   const [lastSale, setLastSale] = useState(null);
   const [isCartVisible, setIsCartVisible] = useState(false);
+  const [productCategories, setProductCategories] = useState(['ทั้งหมด']);
   const searchInputRef = useRef(null);
+
+  // โหลดหมวดหมู่สินค้าจาก API
+  const loadProductCategories = useCallback(async () => {
+    try {
+      console.log('🔄 Loading product categories from Categories API...');
+      const response = await categoriesService.getAllCategories(true); // active only
+      console.log('✅ Categories response:', response);
+      
+      if (response && Array.isArray(response.categories)) {
+        // แปลงเป็น array ของชื่อหมวดหมู่
+        const categoryNames = response.categories.map(cat => cat.name);
+        const allCategories = ['ทั้งหมด', ...categoryNames];
+        setProductCategories(allCategories);
+        console.log('✅ Product categories loaded:', allCategories);
+      } else {
+        console.log('⚠️ No categories found in response, using fallback');
+        setProductCategories(['ทั้งหมด', 'เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']);
+      }
+    } catch (error) {
+      console.error('❌ Error loading product categories:', error);
+      // ใช้ fallback categories
+      setProductCategories(['ทั้งหมด', 'เสื้อผ้า', 'รองเท้า', 'กระเป๋า', 'เครื่องประดับ']);
+    }
+  }, []);
+
+  // โหลดหมวดหมู่เมื่อ component mount
+  useEffect(() => {
+    loadProductCategories();
+  }, [loadProductCategories]);
 
   const handleProcessSale = useCallback(async (paymentMethod, discountInfo) => {
     try {
@@ -163,8 +194,9 @@ const POS = () => {
                     setSearchTerm={setSearchTerm}
                     selectedCategory={selectedCategory}
                     setSelectedCategory={setSelectedCategory}
-                    categories={['ทั้งหมด', ...(Array.isArray(categories) ? categories : [])]}
+                    categories={productCategories}
                     searchInputRef={searchInputRef}
+                    onAddCustomer={handleOpenCustomerDialog}
                 />
                 <div className="flex-1 overflow-y-auto scrollbar-hide pr-2 -mr-2 pb-20 lg:pb-0">
                     <ProductGrid products={filteredProducts || []} onAddToCart={addToCart} />

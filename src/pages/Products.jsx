@@ -19,6 +19,7 @@ import { usePos } from '@/hooks/usePos';
 import { useNavigate } from 'react-router-dom';
 import { productService } from '@/services/productService';
 import { categoriesService } from '@/services/categoriesService';
+import { formatCurrency } from '@/lib/utils';
 import { 
   showSuccess, 
   showError, 
@@ -309,7 +310,7 @@ const Products = () => {
                   </td>
                   <td className="py-4 px-6 text-gray-600">{product.barcode || '-'}</td>
                   <td className="py-4 px-6"><span className="bg-blue-100 text-blue-800 text-xs font-medium px-2 py-1 rounded">{product.category}</span></td>
-                  <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString()}</td>
+                  <td className="py-4 px-6 text-right font-medium text-gray-900">{formatCurrency(product.price)}</td>
                   <td className="py-4 px-6 text-center"><span className={`font-medium ${product.stock <= 10 ? 'text-red-600' : product.stock <= 20 ? 'text-orange-600' : 'text-green-600'}`}>{product.stock}</span></td>
                   <td className="py-4 px-6">
                     <div className="flex items-center justify-center space-x-2">
@@ -357,7 +358,7 @@ const Products = () => {
               <div className="mt-2 pt-2 border-t grid grid-cols-3 gap-2 text-center">
                 <div>
                   <p className="text-xs text-gray-500">ราคาขาย</p>
-                  <p className="font-medium text-gray-800">฿{product.price.toLocaleString()}</p>
+                  <p className="font-medium text-gray-800">{formatCurrency(product.price)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-gray-500">สต็อก</p>

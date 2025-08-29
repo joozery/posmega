@@ -5,11 +5,13 @@ import { useToast } from '@/components/ui/use-toast';
 import { X, Trash2, UserPlus, UserCheck, Star, Ticket, Tag } from 'lucide-react';
 import PaymentDialog from '@/components/PaymentDialog';
 import { showErrorToast, showSuccessToast } from '@/utils/sweetalert';
+import { formatCurrency } from '@/lib/utils';
 
 const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemoveCustomer, onUpdateQuantity, onRemoveFromCart, onOpenCustomerDialog, onProcessSale, onClose }) => {
     const { toast } = useToast();
     const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
     const [loyaltySettings, setLoyaltySettings] = useState({ purchaseAmountForOnePoint: 100, onePointValueInBaht: 1 });
+    const [taxRate, setTaxRate] = useState(0.03); // Default 3%
     const [pointsToUse, setPointsToUse] = useState('');
     const [discount, setDiscount] = useState(0);
     const [excludeVAT, setExcludeVAT] = useState(false);
@@ -21,7 +23,39 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
             if (parsed.loyalty) {
                 setLoyaltySettings(parsed.loyalty);
             }
+            // Load tax rate from settings
+            const taxRateValue = parsed.system?.taxRate || parsed.system?.tax_rate;
+            if (taxRateValue) {
+                setTaxRate(parseFloat(taxRateValue) / 100);
+                console.log('✅ CartPanel - Tax rate loaded:', taxRateValue);
+            } else {
+                console.log('⚠️ CartPanel - No tax rate found in settings, using default 3%');
+            }
         }
+    }, []);
+
+    // Listen for settings updates
+    useEffect(() => {
+        const handleSettingsUpdate = () => {
+            const savedSettings = localStorage.getItem('pos_settings');
+            if (savedSettings) {
+                const parsed = JSON.parse(savedSettings);
+                if (parsed.loyalty) {
+                    setLoyaltySettings(parsed.loyalty);
+                }
+                // Update tax rate from settings
+                const taxRateValue = parsed.system?.taxRate || parsed.system?.tax_rate;
+                if (taxRateValue) {
+                    setTaxRate(parseFloat(taxRateValue) / 100);
+                    console.log('✅ CartPanel - Tax rate updated:', taxRateValue);
+                } else {
+                    console.log('⚠️ CartPanel - No tax rate found in settings update, using default 3%');
+                }
+            }
+        };
+
+        window.addEventListener('settings_updated', handleSettingsUpdate);
+        return () => window.removeEventListener('settings_updated', handleSettingsUpdate);
     }, []);
 
     useEffect(() => {
@@ -31,8 +65,6 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
     }, [selectedCustomer, cart]);
 
     const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const taxRateData = JSON.parse(localStorage.getItem('pos_settings') || '{}')?.system?.taxRate;
-    const taxRate = parseFloat(taxRateData || 7) / 100;
     const totalAfterDiscount = subtotal - discount;
     const tax = excludeVAT ? 0 : totalAfterDiscount * taxRate;
     const total = totalAfterDiscount + tax;
@@ -53,7 +85,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
             return;
         }
         setDiscount(calculatedDiscount);
-        showSuccessToast(`รับส่วนลด ${calculatedDiscount.toLocaleString()} บาท`);
+        showSuccessToast(`รับส่วนลด ${formatCurrency(calculatedDiscount)}`);
     };
 
     const handleRemoveDiscount = () => {
@@ -130,7 +162,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                             </div>
                             <div className="flex-1">
                                 <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
-                                <p className="text-xs text-gray-500">฿{item.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="text-xs text-gray-500">{formatCurrency(item.price)}</p>
                                 
                                 {/* แสดงข้อมูล size และ color */}
                                 {(item.sizes?.length > 0 || item.colors?.length > 0) && (
@@ -153,7 +185,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                                 </div>
                             </div>
                             <div className="text-right">
-                                <p className="font-bold">฿{(item.price * item.quantity).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                                <p className="font-bold">{formatCurrency(item.price * item.quantity)}</p>
                                 <Button variant="ghost" size="icon" className="w-8 h-8 text-gray-500 hover:text-red-600" onClick={() => onRemoveFromCart(item.id)}><Trash2 className="w-4 h-4" /></Button>
                             </div>
                         </div>
@@ -182,7 +214,7 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                 </div>
                 {excludeVAT && (
                     <p className="text-xs text-orange-600 mt-1">
-                        ⚠️ การขายจะไม่รวม VAT 7% (สำหรับลูกค้าที่ไม่ต้องการใบกำกับภาษี)
+                        ⚠️ การขายจะไม่รวม VAT {(taxRate * 100).toFixed(1)}% (สำหรับลูกค้าที่ไม่ต้องการใบกำกับภาษี)
                     </p>
                 )}
             </div>
@@ -207,26 +239,26 @@ const CartPanel = ({ cart, customers, selectedCustomer, onSelectCustomer, onRemo
                                 <Ticket className="w-5 h-5" />
                                 <span className="font-semibold">ใช้ {pointsToUse} แต้มเป็นส่วนลด</span>
                             </div>
-                            <span className="font-bold text-green-800">-฿{discount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            <span className="font-bold text-green-800">-{formatCurrency(discount)}</span>
                         </div>
                     )}
                 </div>
             )}
 
             <div className="p-4 mt-auto border-t space-y-2">
-                <div className="flex justify-between text-sm"><span className="text-gray-600">ยอดรวม</span><span className="font-medium">฿{subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>
-                {discount > 0 && <div className="flex justify-between text-sm text-green-600"><span className="text-gray-600">ส่วนลด</span><span className="font-medium">-฿{discount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span></div>}
+                <div className="flex justify-between text-sm"><span className="text-gray-600">ยอดรวม</span><span className="font-medium">{formatCurrency(subtotal)}</span></div>
+                {discount > 0 && <div className="flex justify-between text-sm text-green-600"><span className="text-gray-600">ส่วนลด</span><span className="font-medium">-{formatCurrency(discount)}</span></div>}
                 <div className="flex justify-between text-sm">
                     <span className="text-gray-600">
                         ภาษี {excludeVAT ? '(ไม่รวม)' : `(${taxRate * 100}%)`}
                     </span>
                     <span className={`font-medium ${excludeVAT ? 'text-orange-600' : ''}`}>
-                        {excludeVAT ? '฿0.00' : `฿${tax.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}
+                        {excludeVAT ? '฿0.00' : formatCurrency(tax)}
                     </span>
                 </div>
                 <div className="flex justify-between text-xl font-bold">
                     <span className="text-gray-900">ยอดสุทธิ</span>
-                    <span className="text-blue-600">฿{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <span className="text-blue-600">{formatCurrency(total)}</span>
                 </div>
                 <Button size="lg" className="w-full mt-2" onClick={() => setIsPaymentDialogOpen(true)} disabled={cart.length === 0}>
                     <Tag className="w-5 h-5 mr-2" />ชำระเงิน

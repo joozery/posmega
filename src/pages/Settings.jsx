@@ -17,7 +17,7 @@ const Settings = () => {
   const [settings, setSettings] = useState({
     system: { 
       storeName: 'Universal POS', 
-      taxRate: 7,
+      taxRate: 3,
       logo: '',
       address: '',
       phone: '',

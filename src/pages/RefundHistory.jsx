@@ -77,9 +77,9 @@ const RefundHistory = () => {
     // กรองตามคำค้นหา
     if (searchTerm) {
       filtered = filtered.filter(sale => 
-        sale.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sale.items.some(item => item.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        (sale.customer || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (sale.id || '').toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (sale.items || []).some(item => (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
 
@@ -123,7 +123,7 @@ const RefundHistory = () => {
 
       if (startDate && endDate) {
         filtered = filtered.filter(sale => {
-          const saleDate = new Date(sale.timestamp);
+          const saleDate = new Date(sale.timestamp || sale.created_at || new Date());
           return saleDate >= startDate && saleDate < endDate;
         });
       }
@@ -168,9 +168,23 @@ const RefundHistory = () => {
       }
     } catch (error) {
       console.error('Error processing refund:', error);
+      
+      // แสดงข้อความแจ้งเตือนที่เหมาะสม
+      let errorMessage = "ไม่สามารถคืนเงินได้ กรุณาลองใหม่อีกครั้ง";
+      
+      if (error.response?.data?.error) {
+        if (error.response.data.error.includes('already been refunded')) {
+          errorMessage = "รายการนี้ถูกคืนเงินแล้ว ไม่สามารถคืนซ้ำได้";
+        } else if (error.response.data.error.includes('exceed sale total')) {
+          errorMessage = "จำนวนเงินที่คืนเกินกว่ายอดขาย";
+        } else {
+          errorMessage = error.response.data.error;
+        }
+      }
+      
       toast({
         title: "เกิดข้อผิดพลาด",
-        description: "ไม่สามารถคืนเงินได้ กรุณาลองใหม่อีกครั้ง",
+        description: errorMessage,
         variant: "destructive"
       });
     }
@@ -243,13 +257,13 @@ const RefundHistory = () => {
 
     const dataToExport = filteredSales.map(sale => ({
       'Sale ID': sale.id,
-      'Date': new Date(sale.timestamp).toLocaleString('th-TH'),
-      'Customer': sale.customer,
-      'Items': sale.items.map(item => `${item.name} (x${item.quantity})`).join(', '),
-      'Subtotal': sale.subtotal.toFixed(2),
-      'Tax': sale.tax.toFixed(2),
-      'Total': sale.total.toFixed(2),
-      'Payment Method': sale.paymentMethod,
+              'Date': new Date(sale.timestamp || sale.created_at || new Date()).toLocaleString('th-TH'),
+              'Customer': sale.customer || sale.customer_name || 'ลูกค้าทั่วไป',
+              'Items': (sale.items || []).map(item => `${item.name || 'สินค้าไม่ระบุ'} (x${item.quantity || 0})`).join(', '),
+              'Subtotal': (sale.subtotal || 0).toFixed(2),
+        'Tax': (sale.tax || 0).toFixed(2),
+        'Total': (sale.total || 0).toFixed(2),
+              'Payment Method': sale.paymentMethod || sale.payment_method || 'ไม่ระบุ',
       'Status': sale.status || 'completed',
       'Points Used': sale.pointsUsed || 0,
       'Points Earned': sale.pointsEarned || 0
@@ -269,7 +283,7 @@ const RefundHistory = () => {
   };
 
   const getTotalSales = () => filteredSales.reduce((sum, sale) => sum + parseFloat(sale.total || 0), 0);
-  const getTotalItems = () => filteredSales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
+  const getTotalItems = () => filteredSales.reduce((sum, sale) => sum + (sale.items || []).reduce((itemSum, item) => itemSum + (item.quantity || 0), 0), 0);
 
   return (
     <div className="space-y-6">
@@ -485,8 +499,8 @@ const RefundHistory = () => {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      {sale.items && sale.items.length > 0 ? 
-                        sale.items.map(item => `${item.product_name || item.name || 'สินค้าไม่ระบุ'} (x${item.quantity})`).join(', ') :
+                      {(sale.items || []).length > 0 ? 
+                        sale.items.map(item => `${item.product_name || item.name || 'สินค้าไม่ระบุ'} (x${item.quantity || 0})`).join(', ') :
                         'ไม่มีรายการสินค้า'
                       }
                     </div>
@@ -501,13 +515,20 @@ const RefundHistory = () => {
                     {sale.created_at ? new Date(sale.created_at).toLocaleString('th-TH') : 'ไม่ระบุวันที่'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      (sale.status || 'completed') === 'refunded' 
-                        ? 'bg-red-100 text-red-800' 
-                        : 'bg-green-100 text-green-800'
-                    }`}>
-                      {(sale.status || 'completed') === 'refunded' ? 'คืนเงินแล้ว' : 'สำเร็จ'}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        (sale.status || 'completed') === 'refunded' 
+                          ? 'bg-red-100 text-red-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {(sale.status || 'completed') === 'refunded' ? 'คืนเงินแล้ว' : 'สำเร็จ'}
+                      </span>
+                      {(sale.status || 'completed') === 'refunded' && (
+                        <span className="text-xs text-gray-500 mt-1">
+                          (ไม่สามารถคืนซ้ำได้)
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex items-center space-x-2">

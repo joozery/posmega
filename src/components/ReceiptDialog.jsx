@@ -81,6 +81,17 @@ const Receipt = React.forwardRef(({ sale, settings, type = 'receipt' }, ref) => 
         return paymentMethods[method] || method;
     };
 
+    // Format number with comma separator (ลูกน้ำ)
+    const formatNumberWithComma = (number) => {
+        if (typeof number !== 'number' || isNaN(number)) {
+            return '0.00';
+        }
+        return number.toLocaleString('en-US', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    };
+
     // Ensure items have the correct structure
     const processedItems = (safeSale.items || []).map((item, index) => {
         console.log('Processing item:', item);
@@ -207,7 +218,7 @@ const Receipt = React.forwardRef(({ sale, settings, type = 'receipt' }, ref) => 
                                 </td>
                                 <td className="text-center align-top">{item.quantity || 0}</td>
                                 <td className="text-right align-top">
-                                    {((item.price || 0) * (item.quantity || 0)).toFixed(2)}
+                                    {formatNumberWithComma((item.price || 0) * (item.quantity || 0))}
                                 </td>
                             </tr>
                         );
@@ -239,22 +250,22 @@ const Receipt = React.forwardRef(({ sale, settings, type = 'receipt' }, ref) => 
             <div className="space-y-1">
                 <div className="flex justify-between">
                     <span>ยอดรวม</span>
-                    <span>{safeSale.subtotal.toFixed(2)}</span>
+                    <span>{formatNumberWithComma(safeSale.subtotal)}</span>
                 </div>
                 {safeSale.discount > 0 && (
                     <div className="flex justify-between">
                         <span>ส่วนลด</span>
-                        <span>- {safeSale.discount.toFixed(2)}</span>
+                        <span>- {formatNumberWithComma(safeSale.discount)}</span>
                     </div>
                 )}
                 <div className="flex justify-between">
-                    <span>ภาษี ({parseFloat(settings?.system?.taxRate || settings?.tax_rate || 7)}%)</span>
-                    <span>{safeSale.tax.toFixed(2)}</span>
+                    <span>ภาษี ({parseFloat(settings?.system?.taxRate || settings?.tax_rate || 3)}%)</span>
+                    <span>{formatNumberWithComma(safeSale.tax)}</span>
                 </div>
                 <p>----------------------------------------</p>
                 <div className="flex justify-between font-bold text-base">
                     <span>รวมทั้งสิ้น</span>
-                    <span>{safeSale.total.toFixed(2)}</span>
+                    <span>{formatNumberWithComma(safeSale.total)}</span>
                 </div>
                 <div className="flex justify-between text-sm mt-2">
                     <span>ชำระโดย:</span>

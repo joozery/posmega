@@ -63,6 +63,10 @@ export const usePos = () => {
                 const settings = settingsResponse.settings || {};
                 console.log('✅ usePos - settings loaded:', settings);
                 
+                // บันทึกการตั้งค่าลง localStorage
+                localStorage.setItem('pos_settings', JSON.stringify(settings));
+                console.log('✅ usePos - settings saved to localStorage');
+                
                 // ใช้ categories จาก settings หรือ fallback
                 const categoriesFromSettings = settings.categories || [];
                 if (Array.isArray(categoriesFromSettings) && categoriesFromSettings.length > 0) {
@@ -180,7 +184,7 @@ export const usePos = () => {
                 settings = {};
             }
             
-            const taxRate = parseFloat(settings?.system?.taxRate || 7) / 100;
+            const taxRate = parseFloat(settings?.system?.taxRate || 3) / 100;
             const loyaltySettings = settings?.loyalty || { purchaseAmountForOnePoint: 100, onePointValueInBaht: 1 };
 
             const subtotal = (cart || []).reduce((sum, item) => sum + ((item.price || 0) * (item.quantity || 0)), 0);

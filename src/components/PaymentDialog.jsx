@@ -7,6 +7,7 @@ import { useStripe } from '@stripe/react-stripe-js';
 import { toDataURL } from 'qrcode';
 import promptpayPayload from 'promptpay-qr';
 import { settingsService } from '@/services/settingsService';
+import { formatCurrency } from '@/lib/utils';
 
 const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, discount }) => {
   const { toast } = useToast();
@@ -178,7 +179,9 @@ const PaymentDialog = ({ isOpen, onClose, onConfirm, total, cart, customer, disc
           <div className="text-center p-6 flex flex-col items-center">
             <h3 className="text-lg font-semibold mb-4">สแกนเพื่อชำระเงิน</h3>
             {promptPayQR ? <img src={promptPayQR} alt="PromptPay QR Code" className="w-56 h-56 mx-auto rounded-lg border p-2" /> : <Loader2 className="w-16 h-16 animate-spin text-blue-500" />}
-            <p className="font-bold text-2xl text-blue-600 mt-4">ยอดชำระ: ฿{total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <div className="text-center">
+              <p className="font-bold text-2xl text-blue-600 mt-4">ยอดชำระ: {formatCurrency(total)}</p>
+            </div>
             <p className="text-sm text-gray-500 mt-2">โปรดตรวจสอบว่าได้รับยอดเงินแล้วก่อนกดยืนยัน</p>
             <div className="w-full space-y-2 mt-6">
                 <Button onClick={handlePromptPayConfirmation} className="w-full" size="lg">ยืนยันการชำระเงิน</Button>
