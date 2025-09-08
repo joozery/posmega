@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/use-toast';
 import Papa from 'papaparse';
 import { salesService } from '@/services/salesService';
 import { showError, showLoading, closeLoading } from '@/utils/sweetalert';
+import { formatCurrency, formatNumber } from '@/lib/utils';
 
 const Reports = () => {
   const { toast } = useToast();
@@ -37,27 +38,52 @@ const Reports = () => {
       
       // คำนวณช่วงวันที่ตาม dateRange
       const { startDate, endDate } = getDateRange();
+      console.log('📅 Loading stats for date range:', { startDate, endDate });
       
       // เรียก API สำหรับสถิติ
-      const response = await salesService.getSalesStats({ startDate, endDate });
-      console.log('📊 Sales Stats API Response:', response);
-      
-      setStatsData(response);
+      try {
+        const response = await salesService.getSalesStats({ startDate, endDate });
+        console.log('📊 Sales Stats API Response:', response);
+        
+        if (response && (response.summary || response.paymentMethods || response.dailySales || response.topProducts)) {
+          setStatsData(response);
+          console.log('✅ Stats data loaded successfully');
+        } else {
+          console.log('⚠️ No stats data in response, using fallback');
+          setStatsData(null);
+        }
+      } catch (statsError) {
+        console.error('❌ Error loading stats:', statsError);
+        console.log('⚠️ Using fallback for stats data');
+        setStatsData(null);
+      }
       
       // เรียก API สำหรับข้อมูลการขายทั้งหมด (สำหรับ export)
-      const salesResponse = await salesService.getAllSales({ 
-        startDate, 
-        endDate,
-        limit: 1000 // รับข้อมูลมากๆ สำหรับรายงาน
-      });
-      
-      if (salesResponse.sales) {
-        setSalesData(salesResponse.sales);
+      try {
+        const salesResponse = await salesService.getAllSales({ 
+          startDate, 
+          endDate,
+          limit: 1000 // รับข้อมูลมากๆ สำหรับรายงาน
+        });
+        
+        console.log('📈 Sales Data API Response:', salesResponse);
+        
+        if (salesResponse && salesResponse.sales) {
+          setSalesData(salesResponse.sales);
+          console.log('✅ Sales data loaded successfully:', salesResponse.sales.length, 'records');
+        } else {
+          console.log('⚠️ No sales data in response, using empty array');
+          setSalesData([]);
+        }
+      } catch (salesError) {
+        console.error('❌ Error loading sales data:', salesError);
+        console.log('⚠️ Using empty array for sales data');
+        setSalesData([]);
       }
       
       closeLoading();
     } catch (error) {
-      console.error('Error loading sales stats:', error);
+      console.error('Error in loadSalesStats:', error);
       setError('ไม่สามารถโหลดข้อมูลรายงานได้');
       closeLoading();
       showError('เกิดข้อผิดพลาด', 'ไม่สามารถโหลดข้อมูลรายงานได้');
@@ -129,28 +155,81 @@ const Reports = () => {
 
   const filteredSales = getFilteredData();
 
-  // ใช้ข้อมูลจาก API stats
-  const totalSales = statsData?.summary?.totalSales || 0;
-  const totalOrders = statsData?.summary?.totalOrders || 0;
-  const avgOrderValue = statsData?.summary?.averageOrderValue || 0;
+  // ใช้ข้อมูลจาก API stats หรือคำนวณจาก salesData
+  let totalSales = 0;
+  let totalOrders = 0;
+  let avgOrderValue = 0;
+  
+  if (statsData?.summary) {
+    // ใช้ข้อมูลจาก API
+    totalSales = statsData.summary.totalSales || 0;
+    totalOrders = statsData.summary.totalOrders || 0;
+    avgOrderValue = statsData.summary.averageOrderValue || 0;
+  } else {
+    // คำนวณจาก salesData (fallback)
+    totalSales = salesData.reduce((sum, sale) => sum + (parseFloat(sale.total) || 0), 0);
+    totalOrders = salesData.length;
+    avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
+  }
   
   // คำนวณ totalItems จาก salesData
   const totalItems = salesData.reduce((sum, sale) => 
     sum + (sale.items?.reduce((itemSum, item) => itemSum + (item.quantity || 0), 0) || 0), 0
   );
 
-  // ใช้ข้อมูลจาก API stats
-  const topProducts = statsData?.topProducts || [];
+  // ใช้ข้อมูลจาก API stats หรือคำนวณจาก salesData
+  let topProducts = [];
   
-  // แปลงข้อมูล payment methods จาก API
-  const paymentMethods = {};
-  if (statsData?.paymentMethods) {
+  if (statsData?.topProducts && statsData.topProducts.length > 0) {
+    // ใช้ข้อมูลจาก API
+    topProducts = statsData.topProducts;
+  } else {
+    // คำนวณจาก salesData (fallback)
+    const productStats = {};
+    salesData.forEach(sale => {
+      if (sale.items) {
+        sale.items.forEach(item => {
+          const productName = item.name || item.product_name || 'สินค้าไม่ระบุ';
+          if (!productStats[productName]) {
+            productStats[productName] = { quantity: 0, revenue: 0 };
+          }
+          productStats[productName].quantity += item.quantity || 0;
+          productStats[productName].revenue += (item.total || item.price * (item.quantity || 0)) || 0;
+        });
+      }
+    });
+    
+    topProducts = Object.entries(productStats)
+      .map(([name, stats]) => ({
+        name,
+        total_quantity: stats.quantity,
+        total_revenue: stats.revenue
+      }))
+      .sort((a, b) => b.total_quantity - a.total_quantity)
+      .slice(0, 10);
+  }
+  
+  // แปลงข้อมูล payment methods จาก API หรือคำนวณจาก salesData
+  let paymentMethods = {};
+  
+  if (statsData?.paymentMethods && statsData.paymentMethods.length > 0) {
+    // ใช้ข้อมูลจาก API
     statsData.paymentMethods.forEach(method => {
       paymentMethods[method.payment_method] = {
         method: method.payment_method || 'ไม่ระบุ',
         count: method.count || 0,
         amount: method.total || 0
       };
+    });
+  } else {
+    // คำนวณจาก salesData (fallback)
+    salesData.forEach(sale => {
+      const method = sale.payment_method || sale.paymentMethod || 'ไม่ระบุ';
+      if (!paymentMethods[method]) {
+        paymentMethods[method] = { method, count: 0, amount: 0 };
+      }
+      paymentMethods[method].count += 1;
+      paymentMethods[method].amount += parseFloat(sale.total) || 0;
     });
   }
 
@@ -173,7 +252,7 @@ const Reports = () => {
       const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
       
       const daySales = salesData.filter(sale => {
-        const saleDate = new Date(sale.created_at || sale.timestamp);
+        const saleDate = new Date(sale.created_at || sale.timestamp || new Date());
         return saleDate >= dayStart && saleDate < dayEnd;
       });
       
@@ -198,15 +277,15 @@ const Reports = () => {
     }
 
     const dataToExport = filteredSales.map(sale => ({
-      'Sale ID': sale.id,
-      'Timestamp': new Date(sale.timestamp).toLocaleString('th-TH'),
-      'Customer': sale.customer,
-      'Subtotal': sale.subtotal.toFixed(2),
+      'Sale ID': sale.id || 'ไม่ระบุ',
+      'Timestamp': new Date(sale.timestamp || sale.created_at || new Date()).toLocaleString('th-TH'),
+      'Customer': sale.customer || sale.customer_name || 'ลูกค้าทั่วไป',
+      'Subtotal': (sale.subtotal || 0).toFixed(2),
       'Discount': (sale.discount || 0).toFixed(2),
-      'Tax': sale.tax.toFixed(2),
-      'Total': sale.total.toFixed(2),
-      'Payment Method': sale.paymentMethod,
-      'Items': sale.items.map(item => `${item.name} (x${item.quantity})`).join(', ')
+      'Tax': (sale.tax || 0).toFixed(2),
+      'Total': (sale.total || 0).toFixed(2),
+      'Payment Method': sale.paymentMethod || sale.payment_method || 'ไม่ระบุ',
+      'Items': (sale.items || []).map(item => `${item.name || item.product_name || 'สินค้าไม่ระบุ'} (x${item.quantity || 0})`).join(', ')
     }));
 
     const csv = Papa.unparse(dataToExport);
@@ -308,7 +387,7 @@ const Reports = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <DollarSign className="w-8 h-8 text-green-600 mb-3" />
           <p className="text-sm text-gray-600">ยอดขายรวม</p>
-          <p className="text-2xl font-bold text-gray-900">฿{totalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalSales)}</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <ShoppingCart className="w-8 h-8 text-blue-600 mb-3" />
@@ -318,7 +397,7 @@ const Reports = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <BarChart3 className="w-8 h-8 text-purple-600 mb-3" />
           <p className="text-sm text-gray-600">ยอดเฉลี่ยต่อออเดอร์</p>
-          <p className="text-2xl font-bold text-gray-900">฿{avgOrderValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+          <p className="text-2xl font-bold text-gray-900">{formatCurrency(avgOrderValue)}</p>
         </motion.div>
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-white rounded-xl p-6 shadow-sm border">
           <Package className="w-8 h-8 text-orange-600 mb-3" />
@@ -341,7 +420,7 @@ const Reports = () => {
                   <div className="flex-1">
                     <div className="bg-gray-200 rounded-full h-6 relative overflow-hidden">
                       <motion.div initial={{ width: 0 }} animate={{ width: `${percentage}%` }} transition={{ delay: 0.5 + index * 0.1, duration: 0.5 }} className="bg-gradient-to-r from-blue-500 to-purple-600 h-full rounded-full" />
-                      <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-700 px-2">฿{day.amount.toLocaleString()}</div>
+                      <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-gray-700 px-2">{formatCurrency(day.amount)}</div>
                     </div>
                   </div>
                   <div className="w-16 sm:w-20 text-sm text-gray-600 text-right">{day.orders} ออเดอร์</div>
@@ -367,7 +446,7 @@ const Reports = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">฿{(product.total_revenue || product.revenue || 0).toLocaleString()}</p>
+                    <p className="font-semibold text-gray-900">{formatCurrency(product.total_revenue || product.revenue || 0)}</p>
                   </div>
                 </div>
               ))
@@ -391,7 +470,7 @@ const Reports = () => {
                   {method.method === 'เงินสด' ? <DollarSign className="w-6 h-6 text-white" /> : <CreditCard className="w-6 h-6 text-white" />}
                 </div>
                 <h3 className="font-medium text-gray-900">{method.method}</h3>
-                <p className="text-2xl font-bold text-blue-600 mt-2">฿{method.amount.toLocaleString()}</p>
+                <p className="text-2xl font-bold text-blue-600 mt-2">{formatCurrency(method.amount)}</p>
                 <p className="text-sm text-gray-500">{method.count} ครั้ง</p>
               </div>
             ))}

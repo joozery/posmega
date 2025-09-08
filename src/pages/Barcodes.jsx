@@ -166,7 +166,7 @@ const Barcodes = () => {
                                     </td>
                                     <td className="py-4 px-6 font-medium text-gray-900">{product.name}</td>
                                     <td className="py-4 px-6 text-gray-600">{product.barcode || '-'}</td>
-                                    <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString()}</td>
+                                    <td className="py-4 px-6 text-right font-medium text-gray-900">฿{product.price.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                     <td className="py-4 px-6">
                                         {selectedProducts[product.id] && (
                                             <input

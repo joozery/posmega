@@ -47,7 +47,7 @@ const BarcodeLabel = ({ product, settings: propSettings }) => {
     }
   }, [product.barcode, settings]);
 
-  const priceParts = product.price.toLocaleString('en-US', { minimumFractionDigits: 2 }).split('.');
+          const priceParts = product.price.toLocaleString('th-TH', { minimumFractionDigits: 2 }).split('.');
 
   return (
     <div 
@@ -74,7 +74,7 @@ const BarcodeLabel = ({ product, settings: propSettings }) => {
         </div>
         {settings.showPrice && product.originalPrice && (
           <p className="text-right text-xs text-gray-600 mt-1 line-through">
-            ปกติ {product.originalPrice.toLocaleString()}
+                                    ปกติ {product.originalPrice.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </p>
         )}
       </div>

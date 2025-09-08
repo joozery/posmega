@@ -52,13 +52,13 @@ const BarcodeItem = ({ product }) => {
                     )}
                     {settings.showPrice && (
                         <span className={`text-lg flex-shrink-0 ${settings.priceBold ? 'font-black' : 'font-bold'}`}>
-                            {product.price.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            {product.price.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                         </span>
                     )}
                 </div>
                  {settings.showPrice && product.originalPrice && (
                     <p className="text-right text-xs text-gray-500 mt-0 line-through">
-                        ปกติ {product.originalPrice.toLocaleString()}
+                        ปกติ {product.originalPrice.toLocaleString('th-TH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </p>
                 )}
             </div>
