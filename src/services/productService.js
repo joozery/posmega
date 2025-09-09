@@ -4,7 +4,9 @@ export const productService = {
   // Get all products
   async getAllProducts(params = {}) {
     try {
-      const response = await api.get('/products', { params });
+      // เพิ่ม limit เพื่อดึงสินค้าทั้งหมด
+      const defaultParams = { limit: 10000, ...params };
+      const response = await api.get('/products', { params: defaultParams });
       return response.data;
     } catch (error) {
       console.error('Error fetching products:', error);
